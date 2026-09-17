@@ -412,3 +412,6 @@ build/
 cmake-build*/
 CMakeLists.txt
 sandbox/
+
+## AI
+.claude/

@@ -1,14 +1,16 @@
 package ruten
 
-import "core:fmt"
 import "core:image/jpeg"
+import "core:log"
 import "resources"
 import gl "vendor:OpenGL"
 import "window"
 
 main :: proc() {
-	main_window := window.init(width = 800, height = 600, title = "Ruten")
-	if main_window == nil {
+	context.logger = log.create_console_logger()
+
+	main_window, created_window := window.create_window(width = 800, height = 600, title = "Ruten")
+	if !created_window {
 		return
 	}
 	defer window.cleanup(main_window)
@@ -17,7 +19,7 @@ main :: proc() {
 	background_image, error := jpeg.load(filename = image_path)
 
 	if error != nil {
-		fmt.eprintln(fmt.tprintf(fmt = "Failed to load %s", args = {image_path}))
+		log.errorf("Failed to load %s", image_path)
 		return
 	}
 	defer jpeg.destroy(background_image)
@@ -31,7 +33,7 @@ main :: proc() {
 
 	gl_program, gl_program_compiled := gl.load_shaders("shaders/main.vert", "shaders/main.frag")
 	if !gl_program_compiled {
-		fmt.eprintln("Failed to compile/link shaders")
+		log.error("Failed to compile/link shaders")
 		return
 	}
 	defer gl.DeleteProgram(gl_program)

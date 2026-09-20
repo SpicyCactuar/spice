@@ -2,13 +2,15 @@ package window
 
 import "core:fmt"
 import "core:log"
-import gl "vendor:OpenGL"
 import "vendor:glfw"
+import "vendor:vulkan"
 
 Window :: struct {
 	handle:        glfw.WindowHandle,
 	title:         string,
 	width, height: i32,
+	instance:      vulkan.Instance,
+	surface:       vulkan.SurfaceKHR,
 }
 
 create_window :: proc(width, height: i32, title: string) -> (window: Window, ok: bool) {
@@ -17,41 +19,116 @@ create_window :: proc(width, height: i32, title: string) -> (window: Window, ok:
 		return
 	}
 
-	glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
-	glfw.WindowHint(glfw.CONTEXT_VERSION_MAJOR, 4)
-	glfw.WindowHint(glfw.CONTEXT_VERSION_MINOR, 6)
-	glfw.WindowHint(glfw.OPENGL_PROFILE, glfw.OPENGL_CORE_PROFILE)
+	if glfw.VulkanSupported() != glfw.TRUE {
+		log.error("GLFW does not support Vulkan")
+		return
+	}
 
-	window_handle := glfw.CreateWindow(width, height, fmt.ctprintf(title), nil, nil)
+	glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
+	glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
+
+	title_c := fmt.ctprintf(title)
+	window_handle := glfw.CreateWindow(width, height, title_c, nil, nil)
 	if window_handle == nil {
 		log.error("Could not create GLFW window")
 		glfw.Terminate()
 		return
 	}
 
-	glfw.MakeContextCurrent(window_handle)
-	gl.load_up_to(4, 6, glfw.gl_set_proc_address)
+	instance, surface, vulkan_initialized := init_vulkan(
+		window = window_handle,
+		application_name = title_c,
+	)
 
-	return Window{handle = window_handle, title = title, width = width, height = height}, true
+	if !vulkan_initialized {
+		log.errorf("Vulkan failed to initialize")
+		return
+	}
+
+	return Window {
+			handle = window_handle,
+			title = title,
+			width = width,
+			height = height,
+			instance = instance,
+			surface = surface,
+		},
+		true
 }
 
-loop_until_close :: proc(window: Window, background_texture: u32, empty_vao: u32, program: u32) {
+// TODO: Specify return
+init_vulkan :: proc(
+	window: glfw.WindowHandle,
+	application_name: cstring,
+) -> (
+	instance: vulkan.Instance,
+	surface: vulkan.SurfaceKHR,
+	ok: bool,
+) {
+	vulkan.load_proc_addresses(rawptr(glfw.GetInstanceProcAddress))
+
+	application_info := vulkan.ApplicationInfo {
+		sType            = vulkan.StructureType.APPLICATION_INFO,
+		pNext            = nil,
+		pApplicationName = application_name,
+		apiVersion       = vulkan.MAKE_VERSION(1, 4, 0),
+	}
+
+	instance_extensions := glfw.GetRequiredInstanceExtensions()
+	instance_extensions_count := cast(u32)len(instance_extensions)
+	if (instance_extensions_count == 0) {
+		log.error("no Vulkan extensions found, need at least 'VK_KHR_surface'")
+		return
+	}
+
+	log.infof("Found %d Vulkan extension(s)", instance_extensions_count);
+	for extension, _ in instance_extensions {
+		log.infof("%s", extension);
+	}
+
+	instance_create_info := vulkan.InstanceCreateInfo {
+		sType                   = vulkan.StructureType.INSTANCE_CREATE_INFO,
+		pNext                   = nil,
+		pApplicationInfo        = &application_info,
+		enabledExtensionCount   = instance_extensions_count,
+		ppEnabledExtensionNames = raw_data(instance_extensions),
+		enabledLayerCount       = 0,
+	}
+
+	create_instance_result := vulkan.CreateInstance(&instance_create_info, nil, &instance)
+	if (create_instance_result != vulkan.Result.SUCCESS) {
+		log.errorf("Could not create Instance - Result: %v", create_instance_result)
+		return
+	}
+
+	vulkan.load_proc_addresses(instance)
+
+	physical_devices_count: u32
+	vulkan.EnumeratePhysicalDevices(instance, &physical_devices_count, nil)
+	if (physical_devices_count == 0) {
+		log.error("No Vulkan capable GPU found")
+		return
+	}
+
+	physical_devices := make([]vulkan.PhysicalDevice, physical_devices_count)
+	defer delete(physical_devices)
+	vulkan.EnumeratePhysicalDevices(instance, &physical_devices_count, raw_data(physical_devices))
+
+	log.infof("Found %d physical device(s)", physical_devices_count)
+
+	create_surface_result := glfw.CreateWindowSurface(instance, window, nil, &surface)
+	if (create_surface_result != vulkan.Result.SUCCESS) {
+		log.errorf("Could not create Vulkan surface - Result: %v", create_surface_result)
+		return
+	}
+
+	return instance, surface, true
+}
+
+loop_until_close :: proc(window: Window) {
 	glfw.SetKeyCallback(window.handle, close_on_escape_pressed)
 
-	gl.UseProgram(program)
-	gl.Uniform1i(gl.GetUniformLocation(program, "u_texture"), 0)
-
 	for !glfw.WindowShouldClose(window.handle) {
-		width, height := glfw.GetFramebufferSize(window.handle)
-		gl.Viewport(0, 0, width, height)
-
-		gl.Clear(gl.COLOR_BUFFER_BIT)
-		gl.ActiveTexture(gl.TEXTURE0)
-		gl.BindTexture(gl.TEXTURE_2D, background_texture)
-		gl.BindVertexArray(empty_vao)
-		gl.DrawArrays(gl.TRIANGLES, 0, 3)
-
-		glfw.SwapBuffers(window.handle)
 		glfw.PollEvents()
 	}
 }
@@ -70,6 +147,8 @@ close_on_escape_pressed :: proc "c" (
 
 cleanup :: proc(window: Window) {
 	log.info("Terminating Window")
+	vulkan.DestroySurfaceKHR(window.instance, window.surface, nil);
+	vulkan.DestroyInstance(window.instance, nil);
 	glfw.DestroyWindow(window.handle)
 	glfw.Terminate()
 }

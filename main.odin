@@ -2,7 +2,6 @@ package ruten
 
 import "core:image/jpeg"
 import "core:log"
-import "resources"
 import gl "vendor:OpenGL"
 import "window"
 
@@ -24,24 +23,5 @@ main :: proc() {
 	}
 	defer jpeg.destroy(background_image)
 
-	background_texture := resources.create_texture(image = background_image)
-	defer gl.DeleteTextures(1, &background_texture)
-
-	empty_vao: u32
-	gl.GenVertexArrays(1, &empty_vao)
-	defer gl.DeleteVertexArrays(1, &empty_vao)
-
-	gl_program, gl_program_compiled := gl.load_shaders("shaders/main.vert", "shaders/main.frag")
-	if !gl_program_compiled {
-		log.error("Failed to compile/link shaders")
-		return
-	}
-	defer gl.DeleteProgram(gl_program)
-
-	window.loop_until_close(
-		window = main_window,
-		background_texture = background_texture,
-		empty_vao = empty_vao,
-		program = gl_program,
-	)
+	window.loop_until_close(window = main_window)
 }

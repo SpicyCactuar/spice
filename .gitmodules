@@ -1,0 +1,3 @@
+[submodule "libs/odin-vk-bootstrap"]
+	path = libs/odin-vk-bootstrap
+	url = https://github.com/Capati/odin-vk-bootstrap.git

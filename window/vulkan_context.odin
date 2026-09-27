@@ -62,7 +62,7 @@ create_context :: proc(
 		nil,
 		&vulkan_context.surface,
 	)
-	if create_surface_result != vk.Result.SUCCESS {
+	if create_surface_result != .SUCCESS {
 		log.errorf("Failed to create Vulkan surface - Result: %v", create_surface_result)
 		return
 	}
@@ -133,7 +133,7 @@ create_context :: proc(
 		pCreateInfo = vma_allocator_create_info,
 		pAllocator = &vulkan_context.vma_allocator,
 	)
-	if vma_create_allocator_result != vk.Result.SUCCESS {
+	if vma_create_allocator_result != .SUCCESS {
 		log.errorf("Failed to create VMA allocator: %v", vma_create_allocator_result)
 		return
 	}

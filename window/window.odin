@@ -93,12 +93,17 @@ create_window :: proc(title: string, width, height: i32) -> (window: Window, ok:
 	return window, true
 }
 
-loop_until_close :: proc(window: Window) {
+loop_until_close :: proc(window: ^Window) {
 	log.info("Looping until window is closed")
 	glfw.SetKeyCallback(window.handle, close_on_escape_pressed)
 
 	for !glfw.WindowShouldClose(window.handle) {
 		glfw.PollEvents()
+		frame_drawn := draw_frame(&window.renderer, window.vulkan_context)
+		if !frame_drawn {
+			log.errorf("Failed to draw frame: %d", window.renderer.frame_index)
+			return
+		}
 	}
 }
 

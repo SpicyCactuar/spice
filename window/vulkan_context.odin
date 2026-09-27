@@ -17,6 +17,7 @@ Vulkan_Context :: struct {
 	queue:              vk.Queue,
 }
 
+@(require_results)
 create_context :: proc(
 	instance_extensions: []string,
 	window: glfw.WindowHandle,

@@ -37,7 +37,7 @@ main :: proc() {
 	}
 	defer jpeg.destroy(background_image)
 
-	window.loop_until_close(window = main_window)
+	window.loop_until_close(window = &main_window)
 }
 
 report_and_destroy_tracking_allocator :: proc(track: ^mem.Tracking_Allocator) {

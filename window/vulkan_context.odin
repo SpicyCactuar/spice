@@ -75,6 +75,26 @@ create_context :: proc(
 	vkb.physical_device_selector_set_surface(&physical_device_selector, vulkan_context.surface)
 	vkb.physical_device_selector_set_minimum_version(&physical_device_selector, VULKAN_VERSION)
 
+	// Required features are also enabled on the logical device by vkb.
+	vkb.physical_device_selector_set_required_features(
+		&physical_device_selector,
+		{samplerAnisotropy = true},
+	)
+	vkb.physical_device_selector_set_required_features_12(
+		&physical_device_selector,
+		{
+			descriptorIndexing = true,
+			shaderSampledImageArrayNonUniformIndexing = true,
+			descriptorBindingVariableDescriptorCount = true,
+			runtimeDescriptorArray = true,
+			bufferDeviceAddress = true,
+		},
+	)
+	vkb.physical_device_selector_set_required_features_13(
+		&physical_device_selector,
+		{synchronization2 = true, dynamicRendering = true},
+	)
+
 	physical_device_error := vkb.physical_device_selector_select(
 		&physical_device_selector,
 		&vulkan_context.physical_device,
@@ -102,7 +122,7 @@ create_context :: proc(
 	// VMA
 	vma_vulkan_functions := vma.create_vulkan_functions()
 	vma_allocator_create_info := vma.AllocatorCreateInfo {
-		flags            = {},
+		flags            = {.BUFFER_DEVICE_ADDRESS},
 		physicalDevice   = vulkan_context.physical_device.vk_physical_device,
 		device           = vulkan_context.device.vk_device,
 		instance         = vulkan_context.instance.vk_instance,
@@ -119,7 +139,6 @@ create_context :: proc(
 	}
 
 	// Queue
-	queue_families := vulkan_context.device.vk_queue_families
 	graphics_index, graphics_error := vkb.device_get_queue_index(vulkan_context.device, .Graphics)
 	if graphics_error != nil {
 		log.errorf("Failed to find a graphics queue family: %v", graphics_error)

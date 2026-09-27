@@ -10,16 +10,19 @@ Window :: struct {
 	title:          string,
 	width, height:  i32,
 	vulkan_context: Vulkan_Context,
+	renderer:       Renderer,
 }
 
 create :: proc {
 	create_window,
 	create_context,
+	create_renderer,
 }
 
 destroy :: proc {
 	destroy_window,
 	destroy_context,
+	destroy_renderer,
 }
 
 create_window :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) {
@@ -77,6 +80,16 @@ create_window :: proc(title: string, width, height: i32) -> (window: Window, ok:
 	}
 	window.vulkan_context = vulkan_context
 
+	renderer, renderer_initialized := create(
+		vulkan_context = vulkan_context,
+		window = window.handle,
+	)
+	if !renderer_initialized {
+		log.errorf("Failed to initialize Renderer")
+		return
+	}
+	window.renderer = renderer
+
 	return window, true
 }
 
@@ -104,8 +117,16 @@ close_on_escape_pressed :: proc "c" (
 
 destroy_window :: proc(window: ^Window) {
 	log.info("Terminating Window")
+	release_renderer(window)
 	release_vulkan_context(window)
 	release_glfw(window)
+}
+
+// The renderer's swapchain depends on the Vulkan context, so it must be released first.
+@(private = "file")
+release_renderer :: proc(window: ^Window) {
+	destroy(&window.renderer)
+	window.renderer = {}
 }
 
 @(private = "file")

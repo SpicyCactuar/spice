@@ -6,11 +6,14 @@ import "vendor:glfw"
 import vk "vendor:vulkan"
 
 Renderer :: struct {
-	swapchain:             vkb.Swapchain,
-	swapchain_images:      []vk.Image,
-	swapchain_image_views: []vk.ImageView,
-	command_pool:          vk.CommandPool,
-	command_buffers:       [FRAMES_IN_FLIGHT]vk.CommandBuffer,
+	swapchain:                  vkb.Swapchain,
+	swapchain_images:           []vk.Image,
+	swapchain_image_views:      []vk.ImageView,
+	command_pool:               vk.CommandPool,
+	command_buffers:            [FRAMES_IN_FLIGHT]vk.CommandBuffer,
+	fences:                     [FRAMES_IN_FLIGHT]vk.Fence,
+	image_acquired_semaphores:  [FRAMES_IN_FLIGHT]vk.Semaphore,
+	render_complete_semaphores: []vk.Semaphore,
 }
 
 create_renderer :: proc(
@@ -107,7 +110,7 @@ create_renderer :: proc(
 		return
 	}
 
-	// Command buffer
+	// Command buffers
 	command_pool_create_info := vk.CommandPoolCreateInfo {
 		sType            = .COMMAND_POOL_CREATE_INFO,
 		pNext            = nil,
@@ -142,11 +145,82 @@ create_renderer :: proc(
 		return
 	}
 
+	// Synchronization
+	fence_create_info := vk.FenceCreateInfo {
+		sType = .FENCE_CREATE_INFO,
+		pNext = nil,
+		flags = {.SIGNALED},
+	}
+	for &fence, index in renderer.fences {
+		fence_create_result := vk.CreateFence(
+			vulkan_context.device.vk_device,
+			&fence_create_info,
+			nil,
+			&fence,
+		)
+
+		if fence_create_result != .SUCCESS {
+			log.errorf("Failed to create fence #%d: %v", index, fence_create_result)
+			return
+		}
+	}
+
+	semaphore_create_info := vk.SemaphoreCreateInfo {
+		sType = .SEMAPHORE_CREATE_INFO,
+		pNext = nil,
+	}
+	for &semaphore, index in renderer.image_acquired_semaphores {
+		semaphore_create_result := vk.CreateSemaphore(
+			vulkan_context.device.vk_device,
+			&semaphore_create_info,
+			nil,
+			&semaphore,
+		)
+
+		if semaphore_create_result != .SUCCESS {
+			log.errorf(
+				"Failed to create image acquired semaphore #%d: %v",
+				index,
+				semaphore_create_result,
+			)
+			return
+		}
+	}
+
+	renderer.render_complete_semaphores = make([]vk.Semaphore, len(renderer.swapchain_images))
+	for &semaphore, index in renderer.render_complete_semaphores {
+		semaphore_create_result := vk.CreateSemaphore(
+			vulkan_context.device.vk_device,
+			&semaphore_create_info,
+			nil,
+			&semaphore,
+		)
+
+		if semaphore_create_result != .SUCCESS {
+			log.errorf(
+				"Failed to create render complete semaphore #%d: %v",
+				index,
+				semaphore_create_result,
+			)
+			return
+		}
+	}
+
 	return renderer, true
 }
 
 destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {
 	log.info("Destroying Renderer")
+	for semaphore in renderer.render_complete_semaphores {
+		vk.DestroySemaphore(vulkan_context.device.vk_device, semaphore, nil)
+	}
+	delete(renderer.render_complete_semaphores)
+	for semaphore in renderer.image_acquired_semaphores {
+		vk.DestroySemaphore(vulkan_context.device.vk_device, semaphore, nil)
+	}
+	for fence in renderer.fences {
+		vk.DestroyFence(vulkan_context.device.vk_device, fence, nil)
+	}
 	if renderer.command_pool != 0 {
 		vk.DestroyCommandPool(vulkan_context.device.vk_device, renderer.command_pool, nil)
 	}

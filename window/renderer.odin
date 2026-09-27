@@ -9,6 +9,8 @@ Renderer :: struct {
 	swapchain:             vkb.Swapchain,
 	swapchain_images:      []vk.Image,
 	swapchain_image_views: []vk.ImageView,
+	command_pool:          vk.CommandPool,
+	command_buffers:       [FRAMES_IN_FLIGHT]vk.CommandBuffer,
 }
 
 create_renderer :: proc(
@@ -19,7 +21,7 @@ create_renderer :: proc(
 	ok: bool,
 ) {
 	defer if !ok {
-		destroy(&renderer)
+		destroy(&renderer, vulkan_context)
 	}
 
 	// Surface capabilities
@@ -105,11 +107,49 @@ create_renderer :: proc(
 		return
 	}
 
+	// Command buffer
+	command_pool_create_info := vk.CommandPoolCreateInfo {
+		sType            = .COMMAND_POOL_CREATE_INFO,
+		pNext            = nil,
+		flags            = {.RESET_COMMAND_BUFFER},
+		queueFamilyIndex = vulkan_context.queue_family_index,
+	}
+	command_pool_result := vk.CreateCommandPool(
+		vulkan_context.device.vk_device,
+		&command_pool_create_info,
+		nil,
+		&renderer.command_pool,
+	)
+	if command_pool_result != .SUCCESS {
+		log.errorf("Failed to create command pool: %v", command_pool_result)
+		return
+	}
+
+	command_buffer_allocate_info := vk.CommandBufferAllocateInfo {
+		sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
+		pNext              = nil,
+		level              = .PRIMARY,
+		commandBufferCount = FRAMES_IN_FLIGHT,
+		commandPool        = renderer.command_pool,
+	}
+	command_buffer_result := vk.AllocateCommandBuffers(
+		vulkan_context.device.vk_device,
+		&command_buffer_allocate_info,
+		raw_data(&renderer.command_buffers),
+	)
+	if command_buffer_result != .SUCCESS {
+		log.errorf("Failed to create command buffers: %v", command_buffer_result)
+		return
+	}
+
 	return renderer, true
 }
 
-destroy_renderer :: proc(renderer: ^Renderer) {
+destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {
 	log.info("Destroying Renderer")
+	if renderer.command_pool != 0 {
+		vk.DestroyCommandPool(vulkan_context.device.vk_device, renderer.command_pool, nil)
+	}
 	if renderer.swapchain_image_views != nil {
 		vkb.swapchain_destroy_image_views(renderer.swapchain, renderer.swapchain_image_views)
 		delete(renderer.swapchain_image_views)
@@ -120,3 +160,6 @@ destroy_renderer :: proc(renderer: ^Renderer) {
 		vkb.destroy_swapchain(&renderer.swapchain)
 	}
 }
+
+@(private = "file")
+FRAMES_IN_FLIGHT :: u32(2)

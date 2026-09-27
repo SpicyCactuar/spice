@@ -125,7 +125,7 @@ destroy_window :: proc(window: ^Window) {
 // The renderer's swapchain depends on the Vulkan context, so it must be released first.
 @(private = "file")
 release_renderer :: proc(window: ^Window) {
-	destroy(&window.renderer)
+	destroy(&window.renderer, window.vulkan_context)
 	window.renderer = {}
 }
 

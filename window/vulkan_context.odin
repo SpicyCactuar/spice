@@ -8,11 +8,13 @@ import "vendor:glfw"
 import vk "vendor:vulkan"
 
 Vulkan_Context :: struct {
-	instance:        vkb.Instance,
-	surface:         vk.SurfaceKHR,
-	physical_device: vkb.Physical_Device,
-	device:          vkb.Device,
-	vma_allocator:   vma.Allocator,
+	instance:           vkb.Instance,
+	surface:            vk.SurfaceKHR,
+	physical_device:    vkb.Physical_Device,
+	device:             vkb.Device,
+	vma_allocator:      vma.Allocator,
+	queue_family_index: u32,
+	queue:              vk.Queue,
 }
 
 create_context :: proc(
@@ -26,6 +28,7 @@ create_context :: proc(
 		destroy(&vulkan_context)
 	}
 
+	// Instance
 	instance_builder: vkb.Instance_Builder
 	vkb.instance_builder_init(&instance_builder)
 	defer vkb.instance_builder_uninit(&instance_builder)
@@ -52,6 +55,7 @@ create_context :: proc(
 		}
 	}
 
+	// Surface
 	create_surface_result := glfw.CreateWindowSurface(
 		vulkan_context.instance.vk_instance,
 		window,
@@ -63,6 +67,7 @@ create_context :: proc(
 		return
 	}
 
+	// Device
 	physical_device_selector: vkb.Physical_Device_Selector
 	vkb.physical_device_selector_init(&physical_device_selector, vulkan_context.instance)
 	defer vkb.physical_device_selector_uninit(&physical_device_selector)
@@ -94,6 +99,7 @@ create_context :: proc(
 		return
 	}
 
+	// VMA
 	vma_vulkan_functions := vma.create_vulkan_functions()
 	vma_allocator_create_info := vma.AllocatorCreateInfo {
 		flags            = {},
@@ -111,6 +117,33 @@ create_context :: proc(
 		log.errorf("Failed to create VMA allocator: %v", vma_create_allocator_result)
 		return
 	}
+
+	// Queue
+	queue_families := vulkan_context.device.vk_queue_families
+	graphics_index, graphics_error := vkb.device_get_queue_index(vulkan_context.device, .Graphics)
+	if graphics_error != nil {
+		log.errorf("Failed to find a graphics queue family: %v", graphics_error)
+		return
+	}
+	present_index, present_error := vkb.device_get_queue_index(vulkan_context.device, .Present)
+	if present_error != nil {
+		log.errorf("Failed to find a present queue family: %v", present_error)
+		return
+	}
+	if graphics_index != present_index {
+		log.errorf(
+			"Graphics (family %d) and present (family %d) are on different queue families, which is not supported",
+			graphics_index,
+			present_index,
+		)
+		return
+	}
+	vulkan_context.queue_family_index = graphics_index
+	vk.GetDeviceQueue(vulkan_context.device.vk_device, graphics_index, 0, &vulkan_context.queue)
+	log.infof(
+		"Using queue 0 of family %d for graphics and present",
+		vulkan_context.queue_family_index,
+	)
 
 	return vulkan_context, true
 }

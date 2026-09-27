@@ -3,6 +3,7 @@ package window
 import "base:runtime"
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
+import vma "libs:odin-vma"
 import "vendor:glfw"
 import vk "vendor:vulkan"
 
@@ -11,6 +12,7 @@ Vulkan_Context :: struct {
 	surface:         vk.SurfaceKHR,
 	physical_device: vkb.Physical_Device,
 	device:          vkb.Device,
+	vma_allocator:   vma.Allocator,
 }
 
 create_context :: proc(
@@ -92,11 +94,32 @@ create_context :: proc(
 		return
 	}
 
+	vma_vulkan_functions := vma.create_vulkan_functions()
+	vma_allocator_create_info := vma.AllocatorCreateInfo {
+		flags            = {},
+		physicalDevice   = vulkan_context.physical_device.vk_physical_device,
+		device           = vulkan_context.device.vk_device,
+		instance         = vulkan_context.instance.vk_instance,
+		pVulkanFunctions = &vma_vulkan_functions,
+		vulkanApiVersion = VULKAN_VERSION,
+	}
+	vma_create_allocator_result := vma.CreateAllocator(
+		pCreateInfo = vma_allocator_create_info,
+		pAllocator = &vulkan_context.vma_allocator,
+	)
+	if vma_create_allocator_result != vk.Result.SUCCESS {
+		log.errorf("Failed to create VMA allocator: %v", vma_create_allocator_result)
+		return
+	}
+
 	return vulkan_context, true
 }
 
 destroy_context :: proc(vulkan_context: ^Vulkan_Context) {
 	log.info("Destroying Vulkan Context")
+	if vulkan_context.vma_allocator != nil {
+		vma.DestroyAllocator(vulkan_context.vma_allocator)
+	}
 	if vulkan_context.device.vk_device != nil {
 		vkb.destroy_device(&vulkan_context.device)
 	}

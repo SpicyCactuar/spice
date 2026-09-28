@@ -98,8 +98,16 @@ loop_until_close :: proc(window: ^Window) {
 	glfw.SetKeyCallback(window.handle, close_on_escape_pressed)
 
 	for !glfw.WindowShouldClose(window.handle) {
+		// While minimized there is nothing to draw, so sleep until an event (e.g. restoring the
+		// window) arrives instead of spinning. Otherwise, keep rendering every iteration.
+		width, height := glfw.GetFramebufferSize(window.handle)
+		if width == 0 || height == 0 {
+			glfw.WaitEvents()
+			continue
+		}
+
 		glfw.PollEvents()
-		frame_drawn := draw_frame(&window.renderer, window.vulkan_context)
+		frame_drawn := draw_frame(&window.renderer, window.vulkan_context, window.handle)
 		if !frame_drawn {
 			log.errorf("Failed to draw frame: %d", window.renderer.frame_index)
 			return

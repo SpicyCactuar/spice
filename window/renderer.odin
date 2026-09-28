@@ -223,6 +223,11 @@ draw_frame :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) -> (ok: 
 		return
 	}
 
+	frame_submitted := submit_frame(renderer, vulkan_context.queue, image_index, command_buffer)
+	if !frame_submitted {
+		return
+	}
+
 	return true
 }
 
@@ -381,6 +386,53 @@ render_frame :: proc(
 			renderer.frame_index,
 			end_command_buffer_result,
 		)
+		return
+	}
+
+	return true
+}
+
+// Submits the frame's commands. Drawing waits for the image to be acquired, and completion
+// signals the image's render complete semaphore (for presenting) and the frame's fence.
+@(private = "file")
+@(require_results)
+submit_frame :: proc(
+	renderer: ^Renderer,
+	queue: vk.Queue,
+	image_index: u32,
+	command_buffer: vk.CommandBuffer,
+) -> (
+	ok: bool,
+) {
+	frame := renderer.frame_index
+
+	wait_semaphore_info := vk.SemaphoreSubmitInfo {
+		sType     = .SEMAPHORE_SUBMIT_INFO,
+		semaphore = renderer.image_acquired_semaphores[frame],
+		stageMask = {.COLOR_ATTACHMENT_OUTPUT},
+	}
+	signal_semaphore_info := vk.SemaphoreSubmitInfo {
+		sType     = .SEMAPHORE_SUBMIT_INFO,
+		semaphore = renderer.render_complete_semaphores[image_index],
+		stageMask = {.COLOR_ATTACHMENT_OUTPUT},
+	}
+	command_buffer_submit_info := vk.CommandBufferSubmitInfo {
+		sType         = .COMMAND_BUFFER_SUBMIT_INFO,
+		commandBuffer = command_buffer,
+	}
+	submit_info := vk.SubmitInfo2 {
+		sType                    = .SUBMIT_INFO_2,
+		waitSemaphoreInfoCount   = 1,
+		pWaitSemaphoreInfos      = &wait_semaphore_info,
+		commandBufferInfoCount   = 1,
+		pCommandBufferInfos      = &command_buffer_submit_info,
+		signalSemaphoreInfoCount = 1,
+		pSignalSemaphoreInfos    = &signal_semaphore_info,
+	}
+
+	submit_result := vk.QueueSubmit2(queue, 1, &submit_info, renderer.fences[frame])
+	if submit_result != .SUCCESS {
+		log.errorf("Failed to submit frame %d: %v", frame, submit_result)
 		return
 	}
 

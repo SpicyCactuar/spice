@@ -64,7 +64,7 @@ create_context :: proc(
 		&vulkan_context.surface,
 	)
 	if create_surface_result != .SUCCESS {
-		log.errorf("Failed to create Vulkan surface - Result: %v", create_surface_result)
+		log.errorf("Failed to create Vulkan surface: %v", create_surface_result)
 		return
 	}
 

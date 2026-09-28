@@ -17,6 +17,7 @@ Renderer :: struct {
 	frame_index:                u32,
 }
 
+// TODO: Document
 @(require_results)
 create_renderer :: proc(
 	vulkan_context: Vulkan_Context,
@@ -207,9 +208,35 @@ create_renderer :: proc(
 	return renderer, true
 }
 
+// TODO: Document
 @(require_results)
 draw_frame :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) -> (ok: bool) {
 	vk_device := vulkan_context.device.vk_device
+
+	image_index, command_buffer, frame_ready := prepare_frame(renderer, vk_device)
+	if !frame_ready {
+		return
+	}
+
+	frame_rendered := render_frame(renderer, image_index, command_buffer)
+	if !frame_rendered {
+		return
+	}
+
+	return true
+}
+
+// TODO: Document
+@(private = "file")
+@(require_results)
+prepare_frame :: proc(
+	renderer: ^Renderer,
+	vk_device: vk.Device,
+) -> (
+	image_index: u32,
+	command_buffer: vk.CommandBuffer,
+	ok: bool,
+) {
 	frame := renderer.frame_index
 	fence_wait_result := vk.WaitForFences(vk_device, 1, &renderer.fences[frame], true, max(u64))
 	if fence_wait_result != .SUCCESS {
@@ -217,7 +244,6 @@ draw_frame :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) -> (ok: 
 		return
 	}
 
-	image_index: u32
 	acquire_result := vk.AcquireNextImageKHR(
 		vk_device,
 		renderer.swapchain.vk_swapchain,
@@ -241,6 +267,120 @@ draw_frame :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) -> (ok: 
 	reset_fences_result := vk.ResetFences(vk_device, 1, &renderer.fences[frame])
 	if reset_fences_result != .SUCCESS {
 		log.errorf("Failed to reset fence in frame %d: %v", frame, reset_fences_result)
+		return
+	}
+
+	command_buffer = renderer.command_buffers[frame]
+	reset_command_buffer_result := vk.ResetCommandBuffer(command_buffer, {})
+	if reset_command_buffer_result != .SUCCESS {
+		log.errorf(
+			"Failed to reset command buffer in frame %d: %v",
+			frame,
+			reset_command_buffer_result,
+		)
+		return
+	}
+
+	command_buffer_begin_info := vk.CommandBufferBeginInfo {
+		sType = .COMMAND_BUFFER_BEGIN_INFO,
+		flags = {.ONE_TIME_SUBMIT},
+	}
+	command_buffer_begin_result := vk.BeginCommandBuffer(
+		command_buffer,
+		&command_buffer_begin_info,
+	)
+	if command_buffer_begin_result != .SUCCESS {
+		log.errorf(
+			"Failed to begin command buffer in frame %d: %v",
+			frame,
+			command_buffer_begin_result,
+		)
+		return
+	}
+
+	return image_index, command_buffer, true
+}
+
+@(private = "file")
+@(require_results)
+render_frame :: proc(
+	renderer: ^Renderer,
+	image_index: u32,
+	command_buffer: vk.CommandBuffer,
+) -> (
+	ok: bool,
+) {
+	swapchain_image_subresource_range := vk.ImageSubresourceRange {
+		aspectMask = {.COLOR},
+		levelCount = 1,
+		layerCount = 1,
+	}
+	swapchain_image_transition_barrier := vk.ImageMemoryBarrier2 {
+		sType            = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
+		srcAccessMask    = {},
+		dstStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
+		dstAccessMask    = {.COLOR_ATTACHMENT_READ, .COLOR_ATTACHMENT_WRITE},
+		oldLayout        = .UNDEFINED,
+		newLayout        = .ATTACHMENT_OPTIMAL,
+		image            = renderer.swapchain_images[image_index],
+		subresourceRange = swapchain_image_subresource_range,
+	}
+	swapchain_image_transition_dependency_info := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &swapchain_image_transition_barrier,
+	}
+	vk.CmdPipelineBarrier2(command_buffer, &swapchain_image_transition_dependency_info)
+
+	color_attachment := vk.RenderingAttachmentInfo {
+		sType       = .RENDERING_ATTACHMENT_INFO,
+		imageView   = renderer.swapchain_image_views[image_index],
+		imageLayout = .ATTACHMENT_OPTIMAL,
+		loadOp      = .CLEAR,
+		storeOp     = .STORE,
+		clearValue  = CLEAR_COLOR,
+	}
+	render_area := vk.Rect2D {
+		extent = renderer.swapchain.vk_extent,
+	}
+	rendering_info := vk.RenderingInfo {
+		sType                = .RENDERING_INFO,
+		renderArea           = render_area,
+		layerCount           = 1,
+		colorAttachmentCount = 1,
+		pColorAttachments    = &color_attachment,
+	}
+
+	vk.CmdBeginRendering(command_buffer, &rendering_info)
+	// TODO: Submit draw calls
+	vk.CmdEndRendering(command_buffer)
+
+	swapchain_image_present_barrier := vk.ImageMemoryBarrier2 {
+		sType            = .IMAGE_MEMORY_BARRIER_2,
+		srcStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
+		srcAccessMask    = {.COLOR_ATTACHMENT_WRITE},
+		dstStageMask     = {},
+		dstAccessMask    = {},
+		oldLayout        = .ATTACHMENT_OPTIMAL,
+		newLayout        = .PRESENT_SRC_KHR,
+		image            = renderer.swapchain_images[image_index],
+		subresourceRange = swapchain_image_subresource_range,
+	}
+	swapchain_image_present_dependency_info := vk.DependencyInfo {
+		sType                   = .DEPENDENCY_INFO,
+		imageMemoryBarrierCount = 1,
+		pImageMemoryBarriers    = &swapchain_image_present_barrier,
+	}
+	vk.CmdPipelineBarrier2(command_buffer, &swapchain_image_present_dependency_info)
+
+	end_command_buffer_result := vk.EndCommandBuffer(command_buffer)
+	if end_command_buffer_result != .SUCCESS {
+		log.errorf(
+			"Failed to end command buffer in frame %d: %v",
+			renderer.frame_index,
+			end_command_buffer_result,
+		)
 		return
 	}
 
@@ -279,3 +419,8 @@ destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {
 
 @(private = "file")
 FRAMES_IN_FLIGHT :: u32(2)
+
+@(private = "file")
+CLEAR_COLOR := vk.ClearValue {
+	color = {float32 = {0.1, 0.2, 0.4, 1.0}},
+}

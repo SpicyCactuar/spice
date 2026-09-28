@@ -228,6 +228,11 @@ draw_frame :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) -> (ok: 
 		return
 	}
 
+	frame_presented := present_frame(renderer, vulkan_context.queue, &image_index)
+	if !frame_presented {
+		return
+	}
+
 	return true
 }
 
@@ -392,8 +397,7 @@ render_frame :: proc(
 	return true
 }
 
-// Submits the frame's commands. Drawing waits for the image to be acquired, and completion
-// signals the image's render complete semaphore (for presenting) and the frame's fence.
+// TODO: Document
 @(private = "file")
 @(require_results)
 submit_frame :: proc(
@@ -437,6 +441,46 @@ submit_frame :: proc(
 	}
 
 	return true
+}
+
+// TODO: Document
+@(private = "file")
+@(require_results)
+present_frame :: proc(renderer: ^Renderer, queue: vk.Queue, image_index: ^u32) -> (ok: bool) {
+	frame := renderer.frame_index
+
+	present_info := vk.PresentInfoKHR {
+		sType              = .PRESENT_INFO_KHR,
+		waitSemaphoreCount = 1,
+		pWaitSemaphores    = &renderer.render_complete_semaphores[image_index^],
+		swapchainCount     = 1,
+		pSwapchains        = &renderer.swapchain.vk_swapchain,
+		pImageIndices      = image_index,
+	}
+	present_result := vk.QueuePresentKHR(queue, &present_info)
+
+	advance_frame(renderer)
+
+	#partial switch present_result {
+	case .SUCCESS:
+	case .SUBOPTIMAL_KHR, .ERROR_OUT_OF_DATE_KHR:
+		// TODO: Handle SUBOPTIMAL.
+		log.warnf(
+			"Swapchain needs recreating after presenting frame %d: %v",
+			frame,
+			present_result,
+		)
+	case:
+		log.errorf("Failed to present frame %d: %v", frame, present_result)
+		return
+	}
+
+	return true
+}
+
+@(private = "file")
+advance_frame :: proc(renderer: ^Renderer) {
+	renderer.frame_index = (renderer.frame_index + 1) % FRAMES_IN_FLIGHT
 }
 
 destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {

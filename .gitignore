@@ -408,10 +408,13 @@ misc/featuregen/featuregen
 compile_commands.json
 
 # Dev cmake helpers
-build/
+!build/
 cmake-build*/
 CMakeLists.txt
 sandbox/
 
 ## AI
 .claude/
+
+# Compiled shaders (generated from shaders/*.slang by the build script)
+*.spv

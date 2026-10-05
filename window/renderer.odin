@@ -13,10 +13,12 @@ Renderer :: struct {
 	fences:                    [FRAMES_IN_FLIGHT]vk.Fence,
 	image_acquired_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
 	frame_index:               u32,
+	pipeline:                  Vulkan_Pipeline,
 }
 
 // TODO: Document
 @(require_results)
+@(private)
 create_renderer :: proc(
 	vulkan_context: Vulkan_Context,
 	window: glfw.WindowHandle,
@@ -112,6 +114,8 @@ create_renderer :: proc(
 			return
 		}
 	}
+
+	renderer.pipeline = create_pipeline(vulkan_context.device.vk_device) or_return
 
 	return renderer, true
 }
@@ -427,11 +431,14 @@ advance_frame :: proc(renderer: ^Renderer) {
 	renderer.frame_index = (renderer.frame_index + 1) % FRAMES_IN_FLIGHT
 }
 
+@(private)
 destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {
 	log.info("Destroying Renderer")
 	// Device needs to be idle to destroy resources
 	vk_device := vulkan_context.device.vk_device
 	vk.DeviceWaitIdle(vk_device)
+
+	destroy_pipeline(&renderer.pipeline, vk_device)
 
 	for semaphore in renderer.image_acquired_semaphores {
 		vk.DestroySemaphore(vk_device, semaphore, nil)

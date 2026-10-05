@@ -2,6 +2,7 @@ package window
 
 import "core:log"
 import vk "vendor:vulkan"
+import "core:slice"
 
 Vulkan_Pipeline :: struct {
     layout:   vk.PipelineLayout,
@@ -38,7 +39,7 @@ create_shader_module :: proc(
     shader_create_info := vk.ShaderModuleCreateInfo {
         sType    = .SHADER_MODULE_CREATE_INFO,
         pNext    = nil,
-        codeSize = len(spirv) * size_of(u32),
+        codeSize = slice.size(spirv),
         pCode    = raw_data(spirv),
     }
 

@@ -18,7 +18,6 @@ Gpu_Context :: struct {
 }
 
 @(require_results)
-@(private)
 create_gpu_context :: proc(
     instance_extensions: []string,
     window: glfw.WindowHandle,
@@ -169,7 +168,6 @@ create_gpu_context :: proc(
     return gpu_context, true
 }
 
-@(private)
 destroy_gpu_context :: proc(gpu_context: ^Gpu_Context) {
     log.info("Destroying Vulkan Context")
     if gpu_context.vma_allocator != nil {

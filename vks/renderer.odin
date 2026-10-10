@@ -18,7 +18,6 @@ Renderer :: struct {
 
 // TODO: Document
 @(require_results)
-@(private)
 create_renderer :: proc(
     gpu_context: Gpu_Context,
     window: glfw.WindowHandle,
@@ -431,7 +430,6 @@ advance_frame :: proc(renderer: ^Renderer) {
     renderer.frame_index = (renderer.frame_index + 1) % FRAMES_IN_FLIGHT
 }
 
-@(private)
 destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     log.info("Destroying Renderer")
     // Device needs to be idle to destroy resources

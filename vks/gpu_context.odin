@@ -216,4 +216,4 @@ debug_messenger_callback :: proc "system" (
 }
 
 @(private = "file")
-VULKAN_VERSION := vk.MAKE_VERSION(1, 4, 0)
+VULKAN_VERSION :: vk.API_VERSION_1_4

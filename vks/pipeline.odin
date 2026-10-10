@@ -43,18 +43,12 @@ create_shader_module :: proc(
         pCode    = raw_data(spirv),
     }
 
-    create_shader_module_result := vk.CreateShaderModule(
-        vk_device,
-        &shader_create_info,
-        nil,
-        &shader_module,
-    )
-    if create_shader_module_result != .SUCCESS {
-        log.errorf("Failed to create shader module: %v", create_shader_module_result)
-        return
-    }
-    ok = true
-    return
+    check_success(
+        vk.CreateShaderModule(vk_device, &shader_create_info, nil, &shader_module),
+        "Failed to create shader module",
+    ) or_return
+
+    return shader_module, true
 }
 
 @(private)

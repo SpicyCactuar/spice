@@ -22,11 +22,10 @@ create_swapchain :: proc(
 ) -> (
     ok: bool,
 ) {
-    swapchain_error := vkb.swapchain_builder_build(swapchain_builder, &swapchain.vkb_swapchain)
-    if swapchain_error != nil {
-        log.errorf("Failed to build swapchain: %v", swapchain_error)
-        return
-    }
+    check_success(
+        vkb.swapchain_builder_build(swapchain_builder, &swapchain.vkb_swapchain),
+        "Failed to build swapchain",
+    ) or_return
 
     log.infof(
         "Built swapchain: %d image(s), %d x %d, %v, %v",
@@ -38,21 +37,15 @@ create_swapchain :: proc(
     )
 
     // Swapchain images and image views
-    images_error: vkb.Error
-    swapchain.images, images_error = vkb.swapchain_get_images(swapchain.vkb_swapchain)
-    if images_error != nil {
-        log.errorf("Failed to get swapchain images: %v", images_error)
-        return
-    }
+    swapchain.images = check_success(
+        vkb.swapchain_get_images(swapchain.vkb_swapchain),
+        "Failed to get swapchain images",
+    ) or_return
 
-    image_views_error: vkb.Error
-    swapchain.image_views, image_views_error = vkb.swapchain_get_image_views(
-        swapchain.vkb_swapchain,
-    )
-    if image_views_error != nil {
-        log.errorf("Failed to create swapchain image views: %v", image_views_error)
-        return
-    }
+    swapchain.image_views = check_success(
+        vkb.swapchain_get_image_views(swapchain.vkb_swapchain),
+        "Failed to create swapchain image views",
+    ) or_return
 
     semaphore_create_info := vk.SemaphoreCreateInfo {
         sType = .SEMAPHORE_CREATE_INFO,
@@ -60,21 +53,16 @@ create_swapchain :: proc(
     }
     swapchain.render_complete_semaphores = make([]vk.Semaphore, len(swapchain.images))
     for &semaphore, index in swapchain.render_complete_semaphores {
-        semaphore_create_result := vk.CreateSemaphore(
-            gpu_context.device.vk_device,
-            &semaphore_create_info,
-            nil,
-            &semaphore,
-        )
-
-        if semaphore_create_result != .SUCCESS {
-            log.errorf(
-                "Failed to create render complete semaphore #%d: %v",
-                index,
-                semaphore_create_result,
-            )
-            return
-        }
+        check_success(
+            vk.CreateSemaphore(
+                gpu_context.device.vk_device,
+                &semaphore_create_info,
+                nil,
+                &semaphore,
+            ),
+            "Failed to create render complete semaphore #%d",
+            index,
+        ) or_return
     }
 
     return true
@@ -100,11 +88,10 @@ recreate_swapchain :: proc(
 ) -> (
     ok: bool,
 ) {
-    device_idle_result := vk.DeviceWaitIdle(gpu_context.device.vk_device)
-    if device_idle_result != .SUCCESS {
-        log.errorf("Failed to wait for device idle: %v", device_idle_result)
-        return
-    }
+    check_success(
+        vk.DeviceWaitIdle(gpu_context.device.vk_device),
+        "Failed to wait for device idle",
+    ) or_return
 
     // The old swapchain is handed to the new one as `oldSwapchain`, so it must outlive the build.
     // It is retired either way, so it is destroyed whether the build succeeds or not.
@@ -113,14 +100,12 @@ recreate_swapchain :: proc(
     defer destroy_swapchain(&old_swapchain, gpu_context)
 
     swapchain_builder: vkb.Swapchain_Builder
-    if !create_swapchain_builder(
+    create_swapchain_builder(
         &swapchain_builder,
         gpu_context,
         window,
         swapchain_handle(old_swapchain),
-    ) {
-        return
-    }
+    ) or_return
     defer vkb.swapchain_builder_uninit(&swapchain_builder)
 
     return create_swapchain(swapchain, gpu_context, &swapchain_builder)
@@ -139,15 +124,14 @@ create_swapchain_builder :: proc(
 ) {
     // Surface capabilities
     surface_capabilities: vk.SurfaceCapabilitiesKHR
-    surface_capabilities_result := vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(
-        gpu_context.physical_device.vk_physical_device,
-        gpu_context.surface,
-        &surface_capabilities,
-    )
-    if surface_capabilities_result != .SUCCESS {
-        log.errorf("Failed to query surface capabilities: %v", surface_capabilities_result)
-        return
-    }
+    check_success(
+        vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(
+            gpu_context.physical_device.vk_physical_device,
+            gpu_context.surface,
+            &surface_capabilities,
+        ),
+        "Failed to query surface capabilities",
+    ) or_return
 
     // On Wayland the surface has no size of its own (0xFFFFFFFF), and the
     // swapchain decides it, so use the window's framebuffer size instead.

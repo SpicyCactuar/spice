@@ -32,15 +32,10 @@ create_renderer :: proc(
 
     // Swapchain
     swapchain_builder: vkb.Swapchain_Builder
-    if !create_swapchain_builder(&swapchain_builder, gpu_context, window) {
-        return
-    }
+    create_swapchain_builder(&swapchain_builder, gpu_context, window) or_return
     defer vkb.swapchain_builder_uninit(&swapchain_builder)
 
-    created_swapchain := create_swapchain(&renderer.swapchain, gpu_context, &swapchain_builder)
-    if !created_swapchain {
-        return
-    }
+    create_swapchain(&renderer.swapchain, gpu_context, &swapchain_builder) or_return
 
     // Command buffers
     vk_device := gpu_context.device.vk_device
@@ -50,16 +45,10 @@ create_renderer :: proc(
         flags            = {.RESET_COMMAND_BUFFER},
         queueFamilyIndex = gpu_context.queue_family_index,
     }
-    command_pool_result := vk.CreateCommandPool(
-        vk_device,
-        &command_pool_create_info,
-        nil,
-        &renderer.command_pool,
-    )
-    if command_pool_result != .SUCCESS {
-        log.errorf("Failed to create command pool: %v", command_pool_result)
-        return
-    }
+    check_success(
+        vk.CreateCommandPool(vk_device, &command_pool_create_info, nil, &renderer.command_pool),
+        "Failed to create command pool",
+    ) or_return
 
     command_buffer_allocate_info := vk.CommandBufferAllocateInfo {
         sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
@@ -68,15 +57,14 @@ create_renderer :: proc(
         commandBufferCount = FRAMES_IN_FLIGHT,
         commandPool        = renderer.command_pool,
     }
-    command_buffer_result := vk.AllocateCommandBuffers(
-        vk_device,
-        &command_buffer_allocate_info,
-        raw_data(&renderer.command_buffers),
-    )
-    if command_buffer_result != .SUCCESS {
-        log.errorf("Failed to create command buffers: %v", command_buffer_result)
-        return
-    }
+    check_success(
+        vk.AllocateCommandBuffers(
+            vk_device,
+            &command_buffer_allocate_info,
+            raw_data(&renderer.command_buffers),
+        ),
+        "Failed to create command buffers",
+    ) or_return
 
     // Synchronization
     fence_create_info := vk.FenceCreateInfo {
@@ -85,12 +73,11 @@ create_renderer :: proc(
         flags = {.SIGNALED},
     }
     for &fence, index in renderer.fences {
-        fence_create_result := vk.CreateFence(vk_device, &fence_create_info, nil, &fence)
-
-        if fence_create_result != .SUCCESS {
-            log.errorf("Failed to create fence #%d: %v", index, fence_create_result)
-            return
-        }
+        check_success(
+            vk.CreateFence(vk_device, &fence_create_info, nil, &fence),
+            "Failed to create fence #%d",
+            index,
+        ) or_return
     }
 
     semaphore_create_info := vk.SemaphoreCreateInfo {
@@ -98,21 +85,11 @@ create_renderer :: proc(
         pNext = nil,
     }
     for &semaphore, index in renderer.image_acquired_semaphores {
-        semaphore_create_result := vk.CreateSemaphore(
-            vk_device,
-            &semaphore_create_info,
-            nil,
-            &semaphore,
-        )
-
-        if semaphore_create_result != .SUCCESS {
-            log.errorf(
-                "Failed to create image acquired semaphore #%d: %v",
-                index,
-                semaphore_create_result,
-            )
-            return
-        }
+        check_success(
+            vk.CreateSemaphore(vk_device, &semaphore_create_info, nil, &semaphore),
+            "Failed to create image acquired semaphore #%d",
+            index,
+        ) or_return
     }
 
     renderer.pipeline = create_pipeline(gpu_context.device.vk_device) or_return
@@ -144,9 +121,7 @@ draw_frame :: proc(
 
     vk_device := gpu_context.device.vk_device
     if renderer.swapchain_out_of_date {
-        if !recreate_swapchain(&renderer.swapchain, gpu_context, window) {
-            return
-        }
+        recreate_swapchain(&renderer.swapchain, gpu_context, window) or_return
         renderer.swapchain_out_of_date = false
     }
 
@@ -155,20 +130,9 @@ draw_frame :: proc(
         return renderer.swapchain_out_of_date
     }
 
-    frame_rendered := render_frame(renderer, image_index, command_buffer)
-    if !frame_rendered {
-        return
-    }
-
-    frame_submitted := submit_frame(renderer, gpu_context.queue, image_index, command_buffer)
-    if !frame_submitted {
-        return
-    }
-
-    frame_presented := present_frame(renderer, gpu_context.queue, &image_index)
-    if !frame_presented {
-        return
-    }
+    render_frame(renderer, image_index, command_buffer) or_return
+    submit_frame(renderer, gpu_context.queue, image_index, command_buffer) or_return
+    present_frame(renderer, gpu_context.queue, &image_index) or_return
 
     return true
 }
@@ -185,11 +149,12 @@ prepare_frame :: proc(
     ok: bool,
 ) {
     frame := renderer.frame_index
-    fence_wait_result := vk.WaitForFences(vk_device, 1, &renderer.fences[frame], true, max(u64))
-    if fence_wait_result != .SUCCESS {
-        log.errorf("Failed to wait for fence in frame %d: %v", frame, fence_wait_result)
-        return
-    }
+    // With an infinite timeout, WaitForFences can't return TIMEOUT, so anything but SUCCESS is an error.
+    check_success(
+        vk.WaitForFences(vk_device, 1, &renderer.fences[frame], true, max(u64)),
+        "Failed to wait for fence in frame %d",
+        frame,
+    ) or_return
 
     acquire_result := vk.AcquireNextImageKHR(
         vk_device,
@@ -219,39 +184,28 @@ prepare_frame :: proc(
         return
     }
 
-    reset_fences_result := vk.ResetFences(vk_device, 1, &renderer.fences[frame])
-    if reset_fences_result != .SUCCESS {
-        log.errorf("Failed to reset fence in frame %d: %v", frame, reset_fences_result)
-        return
-    }
+    check_success(
+        vk.ResetFences(vk_device, 1, &renderer.fences[frame]),
+        "Failed to reset fence in frame %d",
+        frame,
+    ) or_return
 
     command_buffer = renderer.command_buffers[frame]
-    reset_command_buffer_result := vk.ResetCommandBuffer(command_buffer, {})
-    if reset_command_buffer_result != .SUCCESS {
-        log.errorf(
-            "Failed to reset command buffer in frame %d: %v",
-            frame,
-            reset_command_buffer_result,
-        )
-        return
-    }
+    check_success(
+        vk.ResetCommandBuffer(command_buffer, {}),
+        "Failed to reset command buffer in frame %d",
+        frame,
+    ) or_return
 
     command_buffer_begin_info := vk.CommandBufferBeginInfo {
         sType = .COMMAND_BUFFER_BEGIN_INFO,
         flags = {.ONE_TIME_SUBMIT},
     }
-    command_buffer_begin_result := vk.BeginCommandBuffer(
-        command_buffer,
-        &command_buffer_begin_info,
-    )
-    if command_buffer_begin_result != .SUCCESS {
-        log.errorf(
-            "Failed to begin command buffer in frame %d: %v",
-            frame,
-            command_buffer_begin_result,
-        )
-        return
-    }
+    check_success(
+        vk.BeginCommandBuffer(command_buffer, &command_buffer_begin_info),
+        "Failed to begin command buffer in frame %d",
+        frame,
+    ) or_return
 
     return image_index, command_buffer, true
 }
@@ -329,15 +283,11 @@ render_frame :: proc(
     }
     vk.CmdPipelineBarrier2(command_buffer, &swapchain_image_present_dependency_info)
 
-    end_command_buffer_result := vk.EndCommandBuffer(command_buffer)
-    if end_command_buffer_result != .SUCCESS {
-        log.errorf(
-            "Failed to end command buffer in frame %d: %v",
-            renderer.frame_index,
-            end_command_buffer_result,
-        )
-        return
-    }
+    check_success(
+        vk.EndCommandBuffer(command_buffer),
+        "Failed to end command buffer in frame %d",
+        renderer.frame_index,
+    ) or_return
 
     return true
 }
@@ -379,11 +329,11 @@ submit_frame :: proc(
         pSignalSemaphoreInfos    = &signal_semaphore_info,
     }
 
-    submit_result := vk.QueueSubmit2(queue, 1, &submit_info, renderer.fences[frame])
-    if submit_result != .SUCCESS {
-        log.errorf("Failed to submit frame %d: %v", frame, submit_result)
-        return
-    }
+    check_success(
+        vk.QueueSubmit2(queue, 1, &submit_info, renderer.fences[frame]),
+        "Failed to submit frame %d",
+        frame,
+    ) or_return
 
     return true
 }

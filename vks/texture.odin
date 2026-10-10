@@ -79,19 +79,17 @@ create_texture :: proc(
         usage = .AUTO,
         flags = {.HOST_ACCESS_SEQUENTIAL_WRITE, .MAPPED},
     }
-    staging_buffer_result := vma.CreateBuffer(
-        gpu_context.vma_allocator,
-        buffer_create_info,
-        allocation_create_info,
-        &staging_buffer,
-        &staging_allocation,
-        &staging_allocation_info,
-    )
-
-    if staging_buffer_result != .SUCCESS {
-        log.errorf("Failed to create staging buffer: %v", staging_buffer_result)
-        return
-    }
+    check_success(
+        vma.CreateBuffer(
+            gpu_context.vma_allocator,
+            buffer_create_info,
+            allocation_create_info,
+            &staging_buffer,
+            &staging_allocation,
+            &staging_allocation_info,
+        ),
+        "Failed to create staging buffer",
+    ) or_return
     defer vma.DestroyBuffer(gpu_context.vma_allocator, staging_buffer, staging_allocation)
 
     staging_memory_properties: vk.MemoryPropertyFlags

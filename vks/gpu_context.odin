@@ -43,11 +43,10 @@ create_gpu_context :: proc(
         vkb.instance_builder_set_debug_callback(&instance_builder, debug_messenger_callback)
     }
 
-    instance_error := vkb.instance_builder_build(&instance_builder, &gpu_context.instance)
-    if instance_error != nil {
-        log.errorf("Failed to build Vulkan instance: %v", instance_error)
-        return
-    }
+    check_success(
+        vkb.instance_builder_build(&instance_builder, &gpu_context.instance),
+        "Failed to build Vulkan instance",
+    ) or_return
 
     when ODIN_DEBUG {
         log.info("Enabled Vulkan validation layers")
@@ -57,16 +56,15 @@ create_gpu_context :: proc(
     }
 
     // Surface
-    create_surface_result := glfw.CreateWindowSurface(
-        gpu_context.instance.vk_instance,
-        window,
-        nil,
-        &gpu_context.surface,
-    )
-    if create_surface_result != .SUCCESS {
-        log.errorf("Failed to create Vulkan surface: %v", create_surface_result)
-        return
-    }
+    check_success(
+        glfw.CreateWindowSurface(
+            gpu_context.instance.vk_instance,
+            window,
+            nil,
+            &gpu_context.surface,
+        ),
+        "Failed to create Vulkan surface",
+    ) or_return
 
     // Device
     physical_device_selector: vkb.Physical_Device_Selector
@@ -96,29 +94,27 @@ create_gpu_context :: proc(
         {synchronization2 = true, dynamicRendering = true},
     )
 
-    physical_device_error := vkb.physical_device_selector_select(
-        &physical_device_selector,
-        &gpu_context.physical_device,
-    )
-    if physical_device_error != nil {
-        log.errorf("Failed to select Vulkan physical device: %v", physical_device_error)
-        return
-    }
+    check_success(
+        vkb.physical_device_selector_select(
+            &physical_device_selector,
+            &gpu_context.physical_device,
+        ),
+        "Failed to select Vulkan physical device",
+    ) or_return
 
     log.infof("Selected physical device: %s", gpu_context.physical_device.name)
 
     device_builder: vkb.Device_Builder
     vkb.device_builder_init(&device_builder)
     defer vkb.device_builder_uninit(&device_builder)
-    device_builder_error := vkb.device_builder_build(
-        &device_builder,
-        &gpu_context.physical_device,
-        &gpu_context.device,
-    )
-    if device_builder_error != nil {
-        log.errorf("Failed to build Vulkan logical device: %v", device_builder_error)
-        return
-    }
+    check_success(
+        vkb.device_builder_build(
+            &device_builder,
+            &gpu_context.physical_device,
+            &gpu_context.device,
+        ),
+        "Failed to build Vulkan logical device",
+    ) or_return
 
     // VMA
     vma_vulkan_functions := vma.create_vulkan_functions()
@@ -130,26 +126,23 @@ create_gpu_context :: proc(
         pVulkanFunctions = &vma_vulkan_functions,
         vulkanApiVersion = VULKAN_VERSION,
     }
-    vma_create_allocator_result := vma.CreateAllocator(
-        pCreateInfo = vma_allocator_create_info,
-        pAllocator = &gpu_context.vma_allocator,
-    )
-    if vma_create_allocator_result != .SUCCESS {
-        log.errorf("Failed to create VMA allocator: %v", vma_create_allocator_result)
-        return
-    }
+    check_success(
+        vma.CreateAllocator(
+            pCreateInfo = vma_allocator_create_info,
+            pAllocator = &gpu_context.vma_allocator,
+        ),
+        "Failed to create VMA allocator",
+    ) or_return
 
     // Queue
-    graphics_index, graphics_error := vkb.device_get_queue_index(gpu_context.device, .Graphics)
-    if graphics_error != nil {
-        log.errorf("Failed to find a graphics queue family: %v", graphics_error)
-        return
-    }
-    present_index, present_error := vkb.device_get_queue_index(gpu_context.device, .Present)
-    if present_error != nil {
-        log.errorf("Failed to find a present queue family: %v", present_error)
-        return
-    }
+    graphics_index := check_success(
+        vkb.device_get_queue_index(gpu_context.device, .Graphics),
+        "Failed to find a graphics queue family",
+    ) or_return
+    present_index := check_success(
+        vkb.device_get_queue_index(gpu_context.device, .Present),
+        "Failed to find a present queue family",
+    ) or_return
     if graphics_index != present_index {
         log.errorf(
             "Graphics (family %d) and present (family %d) are on different queue families, which is not supported",

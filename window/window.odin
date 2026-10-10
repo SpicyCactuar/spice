@@ -59,7 +59,7 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
         log.info(extension)
     }
 
-    vulkan_context, context_initialized := vks.create(
+    vulkan_context, context_initialized := vks.create_gpu_context(
         instance_extensions = instance_extensions,
         window = window.handle,
     )
@@ -69,7 +69,7 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
     }
     window.vulkan_context = vulkan_context
 
-    renderer, renderer_initialized := vks.create(
+    renderer, renderer_initialized := vks.create_renderer(
         gpu_context = vulkan_context,
         window = window.handle,
     )
@@ -141,13 +141,13 @@ destroy :: proc(window: ^Window) {
 // The renderer's swapchain depends on the Vulkan context, so it must be released first.
 @(private = "file")
 release_renderer :: proc(window: ^Window) {
-    vks.destroy(&window.vulkan_renderer, window.vulkan_context)
+    vks.destroy_renderer(&window.vulkan_renderer, window.vulkan_context)
     window.vulkan_renderer = {}
 }
 
 @(private = "file")
 release_vulkan_context :: proc(window: ^Window) {
-    vks.destroy(&window.vulkan_context)
+    vks.destroy_gpu_context(&window.vulkan_context)
     window.vulkan_context = {}
 }
 

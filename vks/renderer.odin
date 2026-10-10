@@ -27,7 +27,7 @@ create_renderer :: proc(
     ok: bool,
 ) {
     defer if !ok {
-        destroy(&renderer, gpu_context)
+        destroy_renderer(&renderer, gpu_context)
     }
 
     // Swapchain

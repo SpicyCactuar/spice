@@ -26,7 +26,7 @@ create_gpu_context :: proc(
     ok: bool,
 ) {
     defer if !ok {
-        destroy(&gpu_context)
+        destroy_gpu_context(&gpu_context)
     }
 
     // Instance

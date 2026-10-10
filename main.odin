@@ -1,6 +1,7 @@
 package spice
 
-import "core:image/jpeg"
+import "core:image"
+import _ "core:image/jpeg"
 import "core:log"
 import "core:mem"
 import "window"
@@ -29,13 +30,21 @@ main :: proc() {
     log.infof("Created Vulkan window: %s", title)
 
     image_path := "assets/textures/your_name.jpg"
-    background_image, error := jpeg.load(filename = image_path)
+    background_image, load_error := image.load(
+        filename = image_path,
+        options = {.alpha_add_if_missing},
+    )
 
-    if error != nil {
-        log.errorf("Failed to load %s", image_path)
+    if load_error != nil {
+        log.errorf("Failed to load %s: %v", image_path, load_error)
         return
     }
-    defer jpeg.destroy(background_image)
+    defer image.destroy(background_image)
+
+    background_set := window.set_background(window = &main_window, background_image = background_image)
+    if !background_set {
+        return
+    }
 
     window.loop_until_close(window = &main_window)
 }

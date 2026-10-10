@@ -1,6 +1,7 @@
 package window
 
 import "core:fmt"
+import "core:image"
 import "core:log"
 import "core:slice"
 import "vendor:glfw"
@@ -93,6 +94,41 @@ create_window :: proc(title: string, width, height: i32) -> (window: Window, ok:
     return window, true
 }
 
+@(require_results)
+set_background :: proc(window: ^Window, background_image: ^image.Image) -> (ok: bool) {
+    rejection_reason: string
+    defer if rejection_reason != "" {
+        log.error(rejection_reason)
+    }
+
+    if background_image.channels != BACKGROUND_IMAGE_ACCEPTED_CHANNELS {
+        rejection_reason = fmt.tprintf(
+            "Setting Window background image rejected -- channels = %d, expected = %d",
+            background_image.channels,
+            BACKGROUND_IMAGE_ACCEPTED_CHANNELS,
+        )
+        return
+    }
+
+    if background_image.depth != BACKGROUND_IMAGE_ACCEPTED_DEPTH {
+        rejection_reason = fmt.tprintf(
+            "Setting Window background image rejected -- depth = %d, expected = %d",
+            background_image.depth,
+            BACKGROUND_IMAGE_ACCEPTED_DEPTH,
+        )
+        return
+    }
+
+    log.infof(
+        "Setting Window background image -- dimensions = (%d x %d), channels = %d, depth = %d",
+        background_image.width,
+        background_image.height,
+        background_image.channels,
+        background_image.depth,
+    )
+    return true
+}
+
 loop_until_close :: proc(window: ^Window) {
     log.info("Looping until window is closed")
     glfw.SetKeyCallback(window.handle, close_on_escape_pressed)
@@ -155,3 +191,8 @@ release_glfw :: proc(window: ^Window) {
     window.handle = nil
     glfw.Terminate()
 }
+
+@(private = "file")
+BACKGROUND_IMAGE_ACCEPTED_CHANNELS :: 4
+@(private = "file")
+BACKGROUND_IMAGE_ACCEPTED_DEPTH :: 8

@@ -97,6 +97,12 @@ loop_until_close :: proc(window: ^Window) {
     glfw.SetKeyCallback(window.handle, close_on_escape_pressed)
 
     for !glfw.WindowShouldClose(window.handle) {
+        // `context.temp_allocator` is an arena meant for short-lived allocations that is cleared
+        // once per frame, otherwise it keeps growing. The deferred call runs at the end of every
+        // iteration, including the `continue` below.
+        // See: https://odin-lang.org/docs/overview/#allocators
+        defer free_all(context.temp_allocator)
+
         // While minimized there is nothing to draw, so sleep until an event (e.g. restoring the
         // window) arrives instead of spinning. Otherwise, keep rendering every iteration.
         width, height := glfw.GetFramebufferSize(window.handle)

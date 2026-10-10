@@ -418,3 +418,6 @@ sandbox/
 
 # Compiled shaders (generated from shaders/*.slang by the build script)
 *.spv
+
+# Local background image, not distributed with the repository (path set in main.odin)
+assets/textures/background.jpg

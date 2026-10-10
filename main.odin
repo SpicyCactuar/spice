@@ -56,4 +56,4 @@ report_and_destroy_tracking_allocator :: proc(track: ^mem.Tracking_Allocator) {
 }
 
 @(private = "file")
-BACKGROUND_IMAGE_PATH :: "assets/textures/your_name.jpg"
+BACKGROUND_IMAGE_PATH :: "assets/textures/background.jpg"

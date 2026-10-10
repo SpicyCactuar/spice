@@ -1,8 +1,11 @@
 package vks
 
+import "core:bytes"
 import "core:image"
 import _ "core:image/jpeg"
 import "core:log"
+import vma "libs:odin-vma"
+import vk "vendor:vulkan"
 
 Texture :: struct {}
 
@@ -18,6 +21,7 @@ create_texture :: proc(
         destroy_texture(&texture)
     }
 
+    // Load image
     texture_image, load_error := image.load(
         filename = image_path,
         options = {.alpha_add_if_missing},
@@ -27,7 +31,6 @@ create_texture :: proc(
         log.errorf("Failed to load image %s: %v", image_path, load_error)
         return
     }
-
     defer image.destroy(texture_image)
 
     if texture_image.channels != TEXTURE_IMAGE_ACCEPTED_CHANNELS {
@@ -57,6 +60,53 @@ create_texture :: proc(
         texture_image.height,
         texture_image.channels,
         texture_image.depth,
+    )
+
+    // Create staging buffer
+    image_pixels := bytes.buffer_to_bytes(&texture_image.pixels)
+
+    staging_buffer: vk.Buffer
+    staging_allocation: vma.Allocation
+    staging_allocation_info: vma.AllocationInfo
+
+    buffer_create_info := vk.BufferCreateInfo {
+        sType = .BUFFER_CREATE_INFO,
+        pNext = nil,
+        size  = vk.DeviceSize(len(image_pixels)),
+        usage = {.TRANSFER_SRC},
+    }
+    allocation_create_info := vma.AllocationCreateInfo {
+        usage = .AUTO,
+        flags = {.HOST_ACCESS_SEQUENTIAL_WRITE, .MAPPED},
+    }
+    staging_buffer_result := vma.CreateBuffer(
+        gpu_context.vma_allocator,
+        buffer_create_info,
+        allocation_create_info,
+        &staging_buffer,
+        &staging_allocation,
+        &staging_allocation_info,
+    )
+
+    if staging_buffer_result != .SUCCESS {
+        log.errorf("Failed to create staging buffer: %v", staging_buffer_result)
+        return
+    }
+    defer vma.DestroyBuffer(gpu_context.vma_allocator, staging_buffer, staging_allocation)
+
+    staging_memory_properties: vk.MemoryPropertyFlags
+    vma.GetAllocationMemoryProperties(
+        gpu_context.vma_allocator,
+        staging_allocation,
+        &staging_memory_properties,
+    )
+
+    log.infof(
+        "Created staging buffer: size = %d bytes, memory type = %d, properties = %v, mapped = %p",
+        staging_allocation_info.size,
+        staging_allocation_info.memoryType,
+        staging_memory_properties,
+        staging_allocation_info.pMappedData,
     )
 
     return texture, true

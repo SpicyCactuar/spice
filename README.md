@@ -5,10 +5,8 @@ A small Vulkan renderer written in [Odin](https://odin-lang.org), built as a lea
 Resources followed:
 
 1. [How to Vulkan](https://howtovulkan.com) by Sascha Willems
-   - Using modern Vulkan (1.3/1.4): dynamic rendering, synchronization2, buffer device address
-     and descriptor indexing.
-   - Deferring to [odin-vk-bootstrap](https://github.com/Capati/odin-vk-bootstrap) for setup and
-     [VMA](https://github.com/Capati/odin-vma) for memory allocation, wherever possible.
+   - Using modern Vulkan (1.3+): `dynamicRendering`, `synchronization2`, `bufferDeviceAddress` and `descriptorIndexing`.
+   - Deferring to [odin-vk-bootstrap](https://github.com/Capati/odin-vk-bootstrap) for setup and [VMA](https://github.com/Capati/odin-vma) for memory allocation, wherever possible.
 
 ## Project layout
 
@@ -25,11 +23,7 @@ Resources followed:
 
 - [Odin](https://odin-lang.org/docs/install/) (developed with `dev-2026-09`)
 - [Slang](https://github.com/shader-slang/slang/releases) (`slangc` on your `PATH`)
-- A Vulkan 1.4 driver supporting these features:
-  - Vulkan 1.0: `samplerAnisotropy`
-  - Vulkan 1.2: `descriptorIndexing`, `shaderSampledImageArrayNonUniformIndexing`,
-    `descriptorBindingVariableDescriptorCount`, `runtimeDescriptorArray`, `bufferDeviceAddress`
-  - Vulkan 1.3: `synchronization2`, `dynamicRendering`
+- A Vulkan 1.4 driver supporting `descriptorIndexing` and `descriptorBindingVariableDescriptorCount` (the other features spice enables are guaranteed by Vulkan 1.4)
 - On Linux, GLFW 3 installed system-wide (developed with 3.4, e.g. `libglfw3-dev` on Debian/Ubuntu)
 - In debug builds, the Vulkan validation layers (`VK_LAYER_KHRONOS_validation`)
 
@@ -42,8 +36,7 @@ Developed on Linux (WSL2). Other platforms are untested.
 | [odin-vk-bootstrap](https://github.com/Capati/odin-vk-bootstrap) | Vulkan instance, device and swapchain setup | Git submodule in `libs/odin-vk-bootstrap` | MIT |
 | [odin-vma](https://github.com/Capati/odin-vma) | Odin bindings for [Vulkan Memory Allocator](https://github.com/GPUOpen-LibrariesAndSDKs/VulkanMemoryAllocator) | Git submodule in `libs/odin-vma`, static library built locally | MIT |
 
-Also uses packages from Odin's [vendor collection](https://pkg.odin-lang.org/vendor/), which ship
-with the compiler. Some link system libraries; those are listed under [Requirements](#requirements).
+Also uses packages from Odin's [vendor collection](https://pkg.odin-lang.org/vendor/), which ship with the compiler. Some link system libraries, which are listed under [Requirements](#requirements).
 
 ## Building
 
@@ -53,9 +46,7 @@ Clone with the submodules:
 git clone --recurse-submodules https://github.com/SpicyCactuar/spice.git
 ```
 
-Build the VMA static library once, following the
-[odin-vma instructions](https://github.com/Capati/odin-vma#building-vma). On Linux it must end up
-as `libs/odin-vma/libvma_linux_x86_64.a`.
+Build the VMA static library once, following the [odin-vma instructions](https://github.com/Capati/odin-vma#building-vma). On Linux it must end up as `libs/odin-vma/libvma_linux_x86_64.a`.
 
 ### Background image
 
@@ -75,7 +66,6 @@ odin run build -out=bin/build -- run -debug -out=bin/spice
 
 ## License
 
-The code is licensed under the [zlib license](LICENSE). Dependencies in `libs/` keep their own
-licenses.
+The code is licensed under the [zlib license](LICENSE). Dependencies in `libs/` keep their own licenses.
 
 [external-dependencies]: #external-dependencies

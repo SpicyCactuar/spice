@@ -11,7 +11,7 @@ Window :: struct {
     handle:          glfw.WindowHandle,
     title:           string,
     width, height:   i32,
-    vulkan_context:  vks.Context,
+    vulkan_context:  vks.Gpu_Context,
     vulkan_renderer: vks.Renderer,
 }
 
@@ -71,7 +71,7 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
     window.vulkan_context = vulkan_context
 
     renderer, renderer_initialized := vks.create(
-        vulkan_context = vulkan_context,
+        gpu_context = vulkan_context,
         window = window.handle,
     )
     if !renderer_initialized {
@@ -132,7 +132,11 @@ loop_until_close :: proc(window: ^Window) {
         }
 
         glfw.PollEvents()
-        frame_drawn := vks.draw_frame(&window.vulkan_renderer, window.vulkan_context, window.handle)
+        frame_drawn := vks.draw_frame(
+            &window.vulkan_renderer,
+            window.vulkan_context,
+            window.handle,
+        )
         if !frame_drawn {
             log.errorf("Failed to draw frame: %d", window.vulkan_renderer.frame_index)
             return

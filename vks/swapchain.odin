@@ -17,7 +17,7 @@ Swapchain :: struct {
 @(require_results)
 create_swapchain :: proc(
     swapchain: ^Swapchain,
-    vulkan_context: Context,
+    gpu_context: Gpu_Context,
     swapchain_builder: ^vkb.Swapchain_Builder,
 ) -> (
     ok: bool,
@@ -61,7 +61,7 @@ create_swapchain :: proc(
     swapchain.render_complete_semaphores = make([]vk.Semaphore, len(swapchain.images))
     for &semaphore, index in swapchain.render_complete_semaphores {
         semaphore_create_result := vk.CreateSemaphore(
-            vulkan_context.device.vk_device,
+            gpu_context.device.vk_device,
             &semaphore_create_info,
             nil,
             &semaphore,
@@ -95,12 +95,12 @@ swapchain_extent :: proc(swapchain: Swapchain) -> vk.Extent2D {
 @(require_results)
 recreate_swapchain :: proc(
     swapchain: ^Swapchain,
-    vulkan_context: Context,
+    gpu_context: Gpu_Context,
     window: glfw.WindowHandle,
 ) -> (
     ok: bool,
 ) {
-    device_idle_result := vk.DeviceWaitIdle(vulkan_context.device.vk_device)
+    device_idle_result := vk.DeviceWaitIdle(gpu_context.device.vk_device)
     if device_idle_result != .SUCCESS {
         log.errorf("Failed to wait for device idle: %v", device_idle_result)
         return
@@ -110,12 +110,12 @@ recreate_swapchain :: proc(
     // It is retired either way, so it is destroyed whether the build succeeds or not.
     old_swapchain := swapchain^
     swapchain^ = {}
-    defer destroy_swapchain(&old_swapchain, vulkan_context)
+    defer destroy_swapchain(&old_swapchain, gpu_context)
 
     swapchain_builder: vkb.Swapchain_Builder
     if !create_swapchain_builder(
         &swapchain_builder,
-        vulkan_context,
+        gpu_context,
         window,
         swapchain_handle(old_swapchain),
     ) {
@@ -123,7 +123,7 @@ recreate_swapchain :: proc(
     }
     defer vkb.swapchain_builder_uninit(&swapchain_builder)
 
-    return create_swapchain(swapchain, vulkan_context, &swapchain_builder)
+    return create_swapchain(swapchain, gpu_context, &swapchain_builder)
 }
 
 // TODO: Document
@@ -131,7 +131,7 @@ recreate_swapchain :: proc(
 @(require_results)
 create_swapchain_builder :: proc(
     swapchain_builder: ^vkb.Swapchain_Builder,
-    vulkan_context: Context,
+    gpu_context: Gpu_Context,
     window: glfw.WindowHandle,
     old_swapchain: vk.SwapchainKHR = 0,
 ) -> (
@@ -140,8 +140,8 @@ create_swapchain_builder :: proc(
     // Surface capabilities
     surface_capabilities: vk.SurfaceCapabilitiesKHR
     surface_capabilities_result := vk.GetPhysicalDeviceSurfaceCapabilitiesKHR(
-        vulkan_context.physical_device.vk_physical_device,
-        vulkan_context.surface,
+        gpu_context.physical_device.vk_physical_device,
+        gpu_context.surface,
         &surface_capabilities,
     )
     if surface_capabilities_result != .SUCCESS {
@@ -160,11 +160,11 @@ create_swapchain_builder :: proc(
     // Only the surface query above can fail, so an initialized builder means success.
     vkb.swapchain_builder_init(
         swapchain_builder,
-        vulkan_context.physical_device,
-        vulkan_context.device,
-        vulkan_context.surface,
-        vulkan_context.queue_family_index,
-        vulkan_context.queue_family_index,
+        gpu_context.physical_device,
+        gpu_context.device,
+        gpu_context.surface,
+        gpu_context.queue_family_index,
+        gpu_context.queue_family_index,
     )
 
     vkb.swapchain_builder_set_desired_min_image_count(
@@ -191,8 +191,8 @@ create_swapchain_builder :: proc(
 }
 
 @(private)
-destroy_swapchain :: proc(swapchain: ^Swapchain, vulkan_context: Context) {
-    vk_device := vulkan_context.device.vk_device
+destroy_swapchain :: proc(swapchain: ^Swapchain, gpu_context: Gpu_Context) {
+    vk_device := gpu_context.device.vk_device
     for semaphore in swapchain.render_complete_semaphores {
         vk.DestroySemaphore(vk_device, semaphore, nil)
     }

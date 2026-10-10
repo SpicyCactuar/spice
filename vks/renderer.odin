@@ -20,35 +20,35 @@ Renderer :: struct {
 @(require_results)
 @(private)
 create_renderer :: proc(
-    vulkan_context: Context,
+    gpu_context: Gpu_Context,
     window: glfw.WindowHandle,
 ) -> (
     renderer: Renderer,
     ok: bool,
 ) {
     defer if !ok {
-        destroy(&renderer, vulkan_context)
+        destroy(&renderer, gpu_context)
     }
 
     // Swapchain
     swapchain_builder: vkb.Swapchain_Builder
-    if !create_swapchain_builder(&swapchain_builder, vulkan_context, window) {
+    if !create_swapchain_builder(&swapchain_builder, gpu_context, window) {
         return
     }
     defer vkb.swapchain_builder_uninit(&swapchain_builder)
 
-    created_swapchain := create_swapchain(&renderer.swapchain, vulkan_context, &swapchain_builder)
+    created_swapchain := create_swapchain(&renderer.swapchain, gpu_context, &swapchain_builder)
     if !created_swapchain {
         return
     }
 
     // Command buffers
-    vk_device := vulkan_context.device.vk_device
+    vk_device := gpu_context.device.vk_device
     command_pool_create_info := vk.CommandPoolCreateInfo {
         sType            = .COMMAND_POOL_CREATE_INFO,
         pNext            = nil,
         flags            = {.RESET_COMMAND_BUFFER},
-        queueFamilyIndex = vulkan_context.queue_family_index,
+        queueFamilyIndex = gpu_context.queue_family_index,
     }
     command_pool_result := vk.CreateCommandPool(
         vk_device,
@@ -115,7 +115,7 @@ create_renderer :: proc(
         }
     }
 
-    renderer.pipeline = create_pipeline(vulkan_context.device.vk_device) or_return
+    renderer.pipeline = create_pipeline(gpu_context.device.vk_device) or_return
 
     return renderer, true
 }
@@ -124,7 +124,7 @@ create_renderer :: proc(
 @(require_results)
 draw_frame :: proc(
     renderer: ^Renderer,
-    vulkan_context: Context,
+    gpu_context: Gpu_Context,
     window: glfw.WindowHandle,
 ) -> (
     ok: bool,
@@ -142,9 +142,9 @@ draw_frame :: proc(
         renderer.swapchain_out_of_date = true
     }
 
-    vk_device := vulkan_context.device.vk_device
+    vk_device := gpu_context.device.vk_device
     if renderer.swapchain_out_of_date {
-        if !recreate_swapchain(&renderer.swapchain, vulkan_context, window) {
+        if !recreate_swapchain(&renderer.swapchain, gpu_context, window) {
             return
         }
         renderer.swapchain_out_of_date = false
@@ -160,12 +160,12 @@ draw_frame :: proc(
         return
     }
 
-    frame_submitted := submit_frame(renderer, vulkan_context.queue, image_index, command_buffer)
+    frame_submitted := submit_frame(renderer, gpu_context.queue, image_index, command_buffer)
     if !frame_submitted {
         return
     }
 
-    frame_presented := present_frame(renderer, vulkan_context.queue, &image_index)
+    frame_presented := present_frame(renderer, gpu_context.queue, &image_index)
     if !frame_presented {
         return
     }
@@ -432,10 +432,10 @@ advance_frame :: proc(renderer: ^Renderer) {
 }
 
 @(private)
-destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Context) {
+destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     log.info("Destroying Renderer")
     // Device needs to be idle to destroy resources
-    vk_device := vulkan_context.device.vk_device
+    vk_device := gpu_context.device.vk_device
     vk.DeviceWaitIdle(vk_device)
 
     destroy_pipeline(&renderer.pipeline, vk_device)
@@ -450,7 +450,7 @@ destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Context) {
         vk.DestroyCommandPool(vk_device, renderer.command_pool, nil)
     }
 
-    destroy_swapchain(&renderer.swapchain, vulkan_context)
+    destroy_swapchain(&renderer.swapchain, gpu_context)
 }
 
 @(private = "file")

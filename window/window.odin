@@ -1,5 +1,6 @@
 package window
 
+import "../vks"
 import "core:fmt"
 import "core:image"
 import "core:log"
@@ -7,26 +8,14 @@ import "core:slice"
 import "vendor:glfw"
 
 Window :: struct {
-    handle:         glfw.WindowHandle,
-    title:          string,
-    width, height:  i32,
-    vulkan_context: Vulkan_Context,
-    renderer:       Renderer,
+    handle:          glfw.WindowHandle,
+    title:           string,
+    width, height:   i32,
+    vulkan_context:  vks.Context,
+    vulkan_renderer: vks.Renderer,
 }
 
-create :: proc {
-    create_window,
-    create_context,
-    create_renderer,
-}
-
-destroy :: proc {
-    destroy_window,
-    destroy_context,
-    destroy_renderer,
-}
-
-create_window :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) {
+create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) {
     defer if !ok {
         destroy(&window)
     }
@@ -67,21 +56,21 @@ create_window :: proc(title: string, width, height: i32) -> (window: Window, ok:
         },
     )
     defer delete(instance_extensions)
-    for extension, _ in instance_extensions {
+    for extension in instance_extensions {
         log.info(extension)
     }
 
-    vulkan_context, context_initialized := create(
+    vulkan_context, context_initialized := vks.create(
         instance_extensions = instance_extensions,
         window = window.handle,
     )
     if !context_initialized {
-        log.errorf("Failed to initialize Vulkan Context")
+        log.error("Failed to initialize Vulkan Context")
         return
     }
     window.vulkan_context = vulkan_context
 
-    renderer, renderer_initialized := create(
+    renderer, renderer_initialized := vks.create(
         vulkan_context = vulkan_context,
         window = window.handle,
     )
@@ -89,7 +78,7 @@ create_window :: proc(title: string, width, height: i32) -> (window: Window, ok:
         log.errorf("Failed to initialize Renderer")
         return
     }
-    window.renderer = renderer
+    window.vulkan_renderer = renderer
 
     return window, true
 }
@@ -143,9 +132,9 @@ loop_until_close :: proc(window: ^Window) {
         }
 
         glfw.PollEvents()
-        frame_drawn := draw_frame(&window.renderer, window.vulkan_context, window.handle)
+        frame_drawn := vks.draw_frame(&window.vulkan_renderer, window.vulkan_context, window.handle)
         if !frame_drawn {
-            log.errorf("Failed to draw frame: %d", window.renderer.frame_index)
+            log.errorf("Failed to draw frame: %d", window.vulkan_renderer.frame_index)
             return
         }
     }
@@ -164,7 +153,7 @@ close_on_escape_pressed :: proc "c" (
     }
 }
 
-destroy_window :: proc(window: ^Window) {
+destroy :: proc(window: ^Window) {
     log.info("Terminating Window")
     release_renderer(window)
     release_vulkan_context(window)
@@ -174,16 +163,17 @@ destroy_window :: proc(window: ^Window) {
 // The renderer's swapchain depends on the Vulkan context, so it must be released first.
 @(private = "file")
 release_renderer :: proc(window: ^Window) {
-    destroy(&window.renderer, window.vulkan_context)
-    window.renderer = {}
+    vks.destroy(&window.vulkan_renderer, window.vulkan_context)
+    window.vulkan_renderer = {}
 }
 
 @(private = "file")
 release_vulkan_context :: proc(window: ^Window) {
-    destroy(&window.vulkan_context)
+    vks.destroy(&window.vulkan_context)
     window.vulkan_context = {}
 }
 
+@(private = "file")
 release_glfw :: proc(window: ^Window) {
     if window.handle != nil {
         glfw.DestroyWindow(window.handle)

@@ -1,4 +1,4 @@
-package window
+package vks
 
 import "base:runtime"
 import "core:log"
@@ -7,7 +7,7 @@ import vma "libs:odin-vma"
 import "vendor:glfw"
 import vk "vendor:vulkan"
 
-Vulkan_Context :: struct {
+Context :: struct {
     instance:           vkb.Instance,
     surface:            vk.SurfaceKHR,
     physical_device:    vkb.Physical_Device,
@@ -18,11 +18,12 @@ Vulkan_Context :: struct {
 }
 
 @(require_results)
+@(private)
 create_context :: proc(
     instance_extensions: []string,
     window: glfw.WindowHandle,
 ) -> (
-    vulkan_context: Vulkan_Context,
+    vulkan_context: Context,
     ok: bool,
 ) {
     defer if !ok {
@@ -168,7 +169,8 @@ create_context :: proc(
     return vulkan_context, true
 }
 
-destroy_context :: proc(vulkan_context: ^Vulkan_Context) {
+@(private)
+destroy_context :: proc(vulkan_context: ^Context) {
     log.info("Destroying Vulkan Context")
     if vulkan_context.vma_allocator != nil {
         vma.DestroyAllocator(vulkan_context.vma_allocator)

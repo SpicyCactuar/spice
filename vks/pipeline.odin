@@ -1,17 +1,17 @@
-package window
+package vks
 
 import "core:log"
-import vk "vendor:vulkan"
 import "core:slice"
+import vk "vendor:vulkan"
 
-Vulkan_Pipeline :: struct {
+Pipeline :: struct {
     layout:   vk.PipelineLayout,
     pipeline: vk.Pipeline,
 }
 
 @(private)
 @(require_results)
-create_pipeline :: proc(vk_device: vk.Device) -> (pipeline: Vulkan_Pipeline, ok: bool) {
+create_pipeline :: proc(vk_device: vk.Device) -> (pipeline: Pipeline, ok: bool) {
     fullscreen_shader_module, fullscreen_shader_created := create_shader_module(
         #load(FULLSCREEN_SPIRV_PATH),
         vk_device,
@@ -58,7 +58,7 @@ create_shader_module :: proc(
 }
 
 @(private)
-destroy_pipeline :: proc(pipeline: ^Vulkan_Pipeline, vk_device: vk.Device) {
+destroy_pipeline :: proc(pipeline: ^Pipeline, vk_device: vk.Device) {
     // TODO: Implement
 }
 

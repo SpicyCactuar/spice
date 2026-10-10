@@ -1,11 +1,11 @@
-package window
+package vks
 
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
 import "vendor:glfw"
 import vk "vendor:vulkan"
 
-Vulkan_Swapchain :: struct {
+Swapchain :: struct {
     vkb_swapchain:              vkb.Swapchain,
     images:                     []vk.Image,
     image_views:                []vk.ImageView,
@@ -16,8 +16,8 @@ Vulkan_Swapchain :: struct {
 @(private)
 @(require_results)
 create_swapchain :: proc(
-    swapchain: ^Vulkan_Swapchain,
-    vulkan_context: Vulkan_Context,
+    swapchain: ^Swapchain,
+    vulkan_context: Context,
     swapchain_builder: ^vkb.Swapchain_Builder,
 ) -> (
     ok: bool,
@@ -81,12 +81,12 @@ create_swapchain :: proc(
 }
 
 @(private)
-swapchain_handle :: proc(swapchain: Vulkan_Swapchain) -> vk.SwapchainKHR {
+swapchain_handle :: proc(swapchain: Swapchain) -> vk.SwapchainKHR {
     return swapchain.vkb_swapchain.vk_swapchain
 }
 
 @(private)
-swapchain_extent :: proc(swapchain: Vulkan_Swapchain) -> vk.Extent2D {
+swapchain_extent :: proc(swapchain: Swapchain) -> vk.Extent2D {
     return swapchain.vkb_swapchain.vk_extent
 }
 
@@ -94,8 +94,8 @@ swapchain_extent :: proc(swapchain: Vulkan_Swapchain) -> vk.Extent2D {
 @(private)
 @(require_results)
 recreate_swapchain :: proc(
-    swapchain: ^Vulkan_Swapchain,
-    vulkan_context: Vulkan_Context,
+    swapchain: ^Swapchain,
+    vulkan_context: Context,
     window: glfw.WindowHandle,
 ) -> (
     ok: bool,
@@ -131,7 +131,7 @@ recreate_swapchain :: proc(
 @(require_results)
 create_swapchain_builder :: proc(
     swapchain_builder: ^vkb.Swapchain_Builder,
-    vulkan_context: Vulkan_Context,
+    vulkan_context: Context,
     window: glfw.WindowHandle,
     old_swapchain: vk.SwapchainKHR = 0,
 ) -> (
@@ -191,7 +191,7 @@ create_swapchain_builder :: proc(
 }
 
 @(private)
-destroy_swapchain :: proc(swapchain: ^Vulkan_Swapchain, vulkan_context: Vulkan_Context) {
+destroy_swapchain :: proc(swapchain: ^Swapchain, vulkan_context: Context) {
     vk_device := vulkan_context.device.vk_device
     for semaphore in swapchain.render_complete_semaphores {
         vk.DestroySemaphore(vk_device, semaphore, nil)

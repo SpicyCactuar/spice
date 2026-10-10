@@ -1,4 +1,4 @@
-package window
+package vks
 
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
@@ -6,21 +6,21 @@ import "vendor:glfw"
 import vk "vendor:vulkan"
 
 Renderer :: struct {
-    swapchain:                 Vulkan_Swapchain,
+    swapchain:                 Swapchain,
     swapchain_out_of_date:     bool,
     command_pool:              vk.CommandPool,
     command_buffers:           [FRAMES_IN_FLIGHT]vk.CommandBuffer,
     fences:                    [FRAMES_IN_FLIGHT]vk.Fence,
     image_acquired_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
     frame_index:               u32,
-    pipeline:                  Vulkan_Pipeline,
+    pipeline:                  Pipeline,
 }
 
 // TODO: Document
 @(require_results)
 @(private)
 create_renderer :: proc(
-    vulkan_context: Vulkan_Context,
+    vulkan_context: Context,
     window: glfw.WindowHandle,
 ) -> (
     renderer: Renderer,
@@ -124,7 +124,7 @@ create_renderer :: proc(
 @(require_results)
 draw_frame :: proc(
     renderer: ^Renderer,
-    vulkan_context: Vulkan_Context,
+    vulkan_context: Context,
     window: glfw.WindowHandle,
 ) -> (
     ok: bool,
@@ -432,7 +432,7 @@ advance_frame :: proc(renderer: ^Renderer) {
 }
 
 @(private)
-destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Vulkan_Context) {
+destroy_renderer :: proc(renderer: ^Renderer, vulkan_context: Context) {
     log.info("Destroying Renderer")
     // Device needs to be idle to destroy resources
     vk_device := vulkan_context.device.vk_device

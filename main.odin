@@ -1,7 +1,5 @@
 package spice
 
-import "core:image"
-import _ "core:image/jpeg"
 import "core:log"
 import "core:mem"
 import "window"
@@ -29,19 +27,10 @@ main :: proc() {
     defer window.destroy(&main_window)
     log.infof("Created Vulkan window: %s", title)
 
-    image_path := "assets/textures/your_name.jpg"
-    background_image, load_error := image.load(
-        filename = image_path,
-        options = {.alpha_add_if_missing},
+    background_set := window.set_background_image(
+        window = &main_window,
+        image_path = BACKGROUND_IMAGE_PATH,
     )
-
-    if load_error != nil {
-        log.errorf("Failed to load %s: %v", image_path, load_error)
-        return
-    }
-    defer image.destroy(background_image)
-
-    background_set := window.set_background(window = &main_window, background_image = background_image)
     if !background_set {
         return
     }
@@ -65,3 +54,6 @@ report_and_destroy_tracking_allocator :: proc(track: ^mem.Tracking_Allocator) {
     }
     mem.tracking_allocator_destroy(track)
 }
+
+@(private = "file")
+BACKGROUND_IMAGE_PATH :: "assets/textures/your_name.jpg"

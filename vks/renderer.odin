@@ -14,6 +14,7 @@ Renderer :: struct {
     image_acquired_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
     frame_index:               u32,
     pipeline:                  Pipeline,
+    background_texture:        Texture,
 }
 
 // TODO: Document
@@ -435,6 +436,8 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     // Device needs to be idle to destroy resources
     vk_device := gpu_context.device.vk_device
     vk.DeviceWaitIdle(vk_device)
+
+    destroy_texture(&renderer.background_texture)
 
     destroy_pipeline(&renderer.pipeline, vk_device)
 

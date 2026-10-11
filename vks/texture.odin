@@ -166,6 +166,161 @@ create_texture :: proc(
         "Failed to create texture image",
     ) or_return
 
+    // Start recording upload commands
+    upload_command_pool_info := vk.CommandPoolCreateInfo {
+        sType            = .COMMAND_POOL_CREATE_INFO,
+        pNext            = nil,
+        // Hint to indicate GPU drivers that this pool is short-lived
+        flags            = {.TRANSIENT},
+        queueFamilyIndex = gpu_context.queue_family_index,
+    }
+    upload_command_pool: vk.CommandPool
+    check_success(
+        vk.CreateCommandPool(
+            gpu_context.device.vk_device,
+            &upload_command_pool_info,
+            nil,
+            &upload_command_pool,
+        ),
+        "Failed to create image upload command pool",
+    ) or_return
+    defer vk.DestroyCommandPool(gpu_context.device.vk_device, upload_command_pool, nil)
+
+    upload_command_buffer_info := vk.CommandBufferAllocateInfo {
+        sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
+        pNext              = nil,
+        commandPool        = upload_command_pool,
+        level              = .PRIMARY,
+        commandBufferCount = 1,
+    }
+    upload_command_buffer: vk.CommandBuffer
+    check_success(
+        vk.AllocateCommandBuffers(
+            gpu_context.device.vk_device,
+            &upload_command_buffer_info,
+            &upload_command_buffer,
+        ),
+        "Failed to allocate image upload command buffer",
+    ) or_return
+
+    upload_begin_info := vk.CommandBufferBeginInfo {
+        sType = .COMMAND_BUFFER_BEGIN_INFO,
+        pNext = nil,
+        flags = {.ONE_TIME_SUBMIT},
+    }
+    check_success(
+        vk.BeginCommandBuffer(upload_command_buffer, &upload_begin_info),
+        "Failed to begin upload command buffer",
+    ) or_return
+
+    // Transition image to TRANSFER_DST_OPTIMAL
+    texture_subresource_range := vk.ImageSubresourceRange {
+        aspectMask = {.COLOR},
+        levelCount = 1,
+        layerCount = 1,
+    }
+
+    // Barrier 1: UNDEFINED -> TRANSFER_DST_OPTIMAL, so the copy can write into the image
+    copy_destination_barrier := vk.ImageMemoryBarrier2 {
+        sType            = .IMAGE_MEMORY_BARRIER_2,
+        srcStageMask     = {},
+        srcAccessMask    = {},
+        dstStageMask     = {.COPY},
+        dstAccessMask    = {.TRANSFER_WRITE},
+        oldLayout        = .UNDEFINED,
+        newLayout        = .TRANSFER_DST_OPTIMAL,
+        image            = texture.image,
+        subresourceRange = texture_subresource_range,
+    }
+    copy_destination_dependency_info := vk.DependencyInfo {
+        sType                   = .DEPENDENCY_INFO,
+        imageMemoryBarrierCount = 1,
+        pImageMemoryBarriers    = &copy_destination_barrier,
+    }
+    vk.CmdPipelineBarrier2(upload_command_buffer, &copy_destination_dependency_info)
+
+    copy_region := vk.BufferImageCopy2 {
+        sType = .BUFFER_IMAGE_COPY_2,
+        bufferOffset = 0,
+        bufferRowLength = 0,
+        bufferImageHeight = 0,
+        imageSubresource = {
+            aspectMask = {.COLOR},
+            mipLevel = 0,
+            baseArrayLayer = 0,
+            layerCount = 1,
+        },
+        imageOffset = {},
+        imageExtent = texture.extent,
+    }
+    copy_info := vk.CopyBufferToImageInfo2 {
+        sType          = .COPY_BUFFER_TO_IMAGE_INFO_2,
+        srcBuffer      = staging_buffer,
+        dstImage       = texture.image,
+        dstImageLayout = .TRANSFER_DST_OPTIMAL,
+        regionCount    = 1,
+        pRegions       = &copy_region,
+    }
+    vk.CmdCopyBufferToImage2(upload_command_buffer, &copy_info)
+
+    // Barrier 2: TRANSFER_DST_OPTIMAL -> SHADER_READ_ONLY_OPTIMAL, so the fragment shader can
+    // sample the copied pixels
+    shader_read_barrier := vk.ImageMemoryBarrier2 {
+        sType            = .IMAGE_MEMORY_BARRIER_2,
+        srcStageMask     = {.COPY},
+        srcAccessMask    = {.TRANSFER_WRITE},
+        dstStageMask     = {.FRAGMENT_SHADER},
+        dstAccessMask    = {.SHADER_SAMPLED_READ},
+        oldLayout        = .TRANSFER_DST_OPTIMAL,
+        newLayout        = .SHADER_READ_ONLY_OPTIMAL,
+        image            = texture.image,
+        subresourceRange = texture_subresource_range,
+    }
+    shader_read_dependency_info := vk.DependencyInfo {
+        sType                   = .DEPENDENCY_INFO,
+        imageMemoryBarrierCount = 1,
+        pImageMemoryBarriers    = &shader_read_barrier,
+    }
+    vk.CmdPipelineBarrier2(upload_command_buffer, &shader_read_dependency_info)
+
+    // End recording upload commands
+    check_success(
+        vk.EndCommandBuffer(upload_command_buffer),
+        "Failed to end upload command buffer",
+    ) or_return
+
+    // Submit the upload
+    fence_create_info := vk.FenceCreateInfo {
+        sType = .FENCE_CREATE_INFO,
+        pNext = nil,
+    }
+    upload_fence: vk.Fence
+    check_success(
+        vk.CreateFence(gpu_context.device.vk_device, &fence_create_info, nil, &upload_fence),
+        "Failed to create texture image upload fence",
+    ) or_return
+    defer vk.DestroyFence(gpu_context.device.vk_device, upload_fence, nil)
+
+    upload_command_buffer_submit_info := vk.CommandBufferSubmitInfo {
+        sType         = .COMMAND_BUFFER_SUBMIT_INFO,
+        commandBuffer = upload_command_buffer,
+    }
+    upload_submit_info := vk.SubmitInfo2 {
+        sType                  = .SUBMIT_INFO_2,
+        commandBufferInfoCount = 1,
+        pCommandBufferInfos    = &upload_command_buffer_submit_info,
+    }
+    check_success(
+        vk.QueueSubmit2(gpu_context.queue, 1, &upload_submit_info, upload_fence),
+        "Failed to submit texture upload",
+    ) or_return
+
+    // Wait for upload to finish
+    check_success(
+        vk.WaitForFences(gpu_context.device.vk_device, 1, &upload_fence, true, max(u64)),
+        "Failed to wait for texture upload",
+    ) or_return
+
     return texture, true
 }
 

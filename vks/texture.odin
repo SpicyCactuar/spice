@@ -12,6 +12,8 @@ Texture :: struct {
     image:      vk.Image,
     allocation: vma.Allocation,
     extent:     vk.Extent3D,
+    view:       vk.ImageView,
+    sampler:    vk.Sampler,
 }
 
 @(require_results)
@@ -141,7 +143,7 @@ create_texture :: proc(
         sType         = .IMAGE_CREATE_INFO,
         pNext         = nil,
         imageType     = .D2,
-        format        = .R8G8B8A8_SRGB,
+        format        = TEXTURE_FORMAT,
         extent        = texture.extent,
         mipLevels     = 1,
         arrayLayers   = 1,
@@ -321,10 +323,58 @@ create_texture :: proc(
         "Failed to wait for texture upload",
     ) or_return
 
+    // Create texture image view
+    view_create_info := vk.ImageViewCreateInfo {
+        sType            = .IMAGE_VIEW_CREATE_INFO,
+        image            = texture.image,
+        viewType         = .D2,
+        format           = TEXTURE_FORMAT,
+        subresourceRange = texture_subresource_range,
+    }
+    check_success(
+        vk.CreateImageView(gpu_context.device.vk_device, &view_create_info, nil, &texture.view),
+        "Failed to create texture image view",
+    ) or_return
+
+    max_anisotropy := min(
+        TEXTURE_MAX_ANISOTROPY,
+        gpu_context.physical_device.vk_properties.limits.maxSamplerAnisotropy,
+    )
+    sampler_create_info := vk.SamplerCreateInfo {
+        sType            = .SAMPLER_CREATE_INFO,
+        magFilter        = .LINEAR,
+        minFilter        = .LINEAR,
+        mipmapMode       = .LINEAR,
+        // Clamp so linear filtering at the edges doesn't blend in pixels from the opposite edge
+        addressModeU     = .CLAMP_TO_EDGE,
+        addressModeV     = .CLAMP_TO_EDGE,
+        addressModeW     = .CLAMP_TO_EDGE,
+        anisotropyEnable = true,
+        maxAnisotropy    = max_anisotropy,
+        minLod           = 0,
+        maxLod           = 1, // The image has a single mip level
+    }
+    check_success(
+        vk.CreateSampler(
+            gpu_context.device.vk_device,
+            &sampler_create_info,
+            nil,
+            &texture.sampler,
+        ),
+        "Failed to create texture sampler",
+    ) or_return
+
     return texture, true
 }
 
 destroy_texture :: proc(texture: ^Texture, gpu_context: Gpu_Context) {
+    vk_device := gpu_context.device.vk_device
+    if texture.sampler != 0 {
+        vk.DestroySampler(vk_device, texture.sampler, nil)
+    }
+    if texture.view != 0 {
+        vk.DestroyImageView(vk_device, texture.view, nil)
+    }
     if texture.image != 0 {
         vma.DestroyImage(gpu_context.vma_allocator, texture.image, texture.allocation)
     }
@@ -334,3 +384,9 @@ destroy_texture :: proc(texture: ^Texture, gpu_context: Gpu_Context) {
 TEXTURE_IMAGE_ACCEPTED_CHANNELS :: 4
 @(private = "file")
 TEXTURE_IMAGE_ACCEPTED_DEPTH :: 8
+@(private = "file")
+TEXTURE_FORMAT :: vk.Format.R8G8B8A8_SRGB
+// Max anisotropic filtering samples, as in How to Vulkan. Clamped to the device limit when used.
+// See: https://github.com/SaschaWillems/HowToVulkan/blob/main/source/main.cpp#L377
+@(private = "file")
+TEXTURE_MAX_ANISOTROPY :: 8.0

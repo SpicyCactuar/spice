@@ -92,7 +92,8 @@ create_renderer :: proc(
         ) or_return
     }
 
-    renderer.pipeline = create_pipeline(gpu_context.device.vk_device) or_return
+    // Pipeline
+    renderer.pipeline = create_pipeline(gpu_context) or_return
 
     return renderer, true
 }
@@ -389,7 +390,7 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
 
     destroy_texture(&renderer.background_texture, gpu_context)
 
-    destroy_pipeline(&renderer.pipeline, vk_device)
+    destroy_pipeline(&renderer.pipeline, gpu_context)
 
     for semaphore in renderer.image_acquired_semaphores {
         vk.DestroySemaphore(vk_device, semaphore, nil)

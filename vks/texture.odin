@@ -24,6 +24,8 @@ create_texture :: proc(
     texture: Texture,
     ok: bool,
 ) {
+    log.infof("Creating texture %s", image_path)
+
     defer if !ok {
         destroy_texture(&texture, gpu_context)
     }
@@ -363,6 +365,8 @@ create_texture :: proc(
         ),
         "Failed to create texture sampler",
     ) or_return
+
+    log.infof("Created texture %s", image_path)
 
     return texture, true
 }

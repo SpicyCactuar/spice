@@ -4,10 +4,15 @@ import "core:bytes"
 import "core:image"
 import _ "core:image/jpeg"
 import "core:log"
+import "core:mem"
 import vma "libs:odin-vma"
 import vk "vendor:vulkan"
 
-Texture :: struct {}
+Texture :: struct {
+    image:      vk.Image,
+    allocation: vma.Allocation,
+    extent:     vk.Extent3D,
+}
 
 @(require_results)
 create_texture :: proc(
@@ -18,7 +23,7 @@ create_texture :: proc(
     ok: bool,
 ) {
     defer if !ok {
-        destroy_texture(&texture)
+        destroy_texture(&texture, gpu_context)
     }
 
     // Load image
@@ -32,6 +37,18 @@ create_texture :: proc(
         return
     }
     defer image.destroy(texture_image)
+
+    max_image_dimension := cast(int)gpu_context.physical_device.vk_properties.limits.maxImageDimension2D
+    if texture_image.width > max_image_dimension || texture_image.height > max_image_dimension {
+        log.errorf(
+            "Rejected texture image %s -- dimensions = (%d x %d), max = %d",
+            image_path,
+            texture_image.width,
+            texture_image.height,
+            max_image_dimension,
+        )
+        return
+    }
 
     if texture_image.channels != TEXTURE_IMAGE_ACCEPTED_CHANNELS {
         log.errorf(
@@ -62,7 +79,7 @@ create_texture :: proc(
         texture_image.depth,
     )
 
-    // Create staging buffer
+    // Fill staging buffer
     image_pixels := bytes.buffer_to_bytes(&texture_image.pixels)
 
     staging_buffer: vk.Buffer
@@ -99,6 +116,17 @@ create_texture :: proc(
         &staging_memory_properties,
     )
 
+    mem.copy(staging_allocation_info.pMappedData, raw_data(image_pixels), len(image_pixels))
+    check_success(
+        vma.FlushAllocation(
+            gpu_context.vma_allocator,
+            staging_allocation,
+            0,
+            vk.DeviceSize(len(image_pixels)),
+        ),
+        "Failed to flush staging buffer",
+    ) or_return
+
     log.infof(
         "Created staging buffer: size = %d bytes, memory type = %d, properties = %v, mapped = %p",
         staging_allocation_info.size,
@@ -107,10 +135,44 @@ create_texture :: proc(
         staging_allocation_info.pMappedData,
     )
 
+    // Create vk.Image
+    texture.extent = {u32(texture_image.width), u32(texture_image.height), 1}
+    image_create_info := vk.ImageCreateInfo {
+        sType         = .IMAGE_CREATE_INFO,
+        pNext         = nil,
+        imageType     = .D2,
+        format        = .R8G8B8A8_SRGB,
+        extent        = texture.extent,
+        mipLevels     = 1,
+        arrayLayers   = 1,
+        samples       = {._1},
+        tiling        = .OPTIMAL,
+        usage         = {.TRANSFER_DST, .SAMPLED},
+        initialLayout = .UNDEFINED,
+    }
+
+    image_allocation_create_info := vma.AllocationCreateInfo {
+        usage = .AUTO,
+    }
+    check_success(
+        vma.CreateImage(
+            gpu_context.vma_allocator,
+            image_create_info,
+            image_allocation_create_info,
+            &texture.image,
+            &texture.allocation,
+            nil,
+        ),
+        "Failed to create texture image",
+    ) or_return
+
     return texture, true
 }
 
-destroy_texture :: proc(texture: ^Texture) {
+destroy_texture :: proc(texture: ^Texture, gpu_context: Gpu_Context) {
+    if texture.image != 0 {
+        vma.DestroyImage(gpu_context.vma_allocator, texture.image, texture.allocation)
+    }
 }
 
 @(private = "file")

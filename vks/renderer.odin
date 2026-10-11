@@ -387,7 +387,7 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     vk_device := gpu_context.device.vk_device
     vk.DeviceWaitIdle(vk_device)
 
-    destroy_texture(&renderer.background_texture)
+    destroy_texture(&renderer.background_texture, gpu_context)
 
     destroy_pipeline(&renderer.pipeline, vk_device)
 

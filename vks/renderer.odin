@@ -437,6 +437,7 @@ set_background :: proc(
     ok: bool,
 ) {
     // Create background texture
+    // TODO: Calling this again leaks the previous texture. Create the new one first, wait for device idle, then destroy the old one.
     renderer.background_texture = create_texture(gpu_context, image_path) or_return
 
     // Write texture into the descriptor

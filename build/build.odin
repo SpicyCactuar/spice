@@ -24,7 +24,7 @@ main :: proc() {
 
 @(private = "file")
 compile_shaders :: proc() -> (ok: bool) {
-    log.info("Compilling shaders...")
+    log.info("Compiling shaders...")
     shader_files, shader_files_error := os.read_all_directory_by_path(
         SHADERS_DIRECTORY,
         context.temp_allocator,

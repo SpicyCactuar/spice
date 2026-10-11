@@ -15,6 +15,8 @@ Renderer :: struct {
     frame_index:               u32,
     pipeline:                  Pipeline,
     background_texture:        Texture,
+    descriptor_pool:           vk.DescriptorPool,
+    descriptor_set:            vk.DescriptorSet,
 }
 
 // TODO: Document
@@ -94,6 +96,50 @@ create_renderer :: proc(
 
     // Pipeline
     renderer.pipeline = create_pipeline(gpu_context) or_return
+
+    // Descriptors
+    descriptor_pool_size := vk.DescriptorPoolSize {
+        type            = .COMBINED_IMAGE_SAMPLER,
+        descriptorCount = MAX_TEXTURES,
+    }
+    descriptor_pool_create_info := vk.DescriptorPoolCreateInfo {
+        sType         = .DESCRIPTOR_POOL_CREATE_INFO,
+        maxSets       = 1,
+        poolSizeCount = 1,
+        pPoolSizes    = &descriptor_pool_size,
+    }
+    check_success(
+        vk.CreateDescriptorPool(
+            vk_device,
+            &descriptor_pool_create_info,
+            nil,
+            &renderer.descriptor_pool,
+        ),
+        "Failed to create descriptor pool",
+    ) or_return
+
+    variable_descriptor_count := u32(MAX_TEXTURES)
+    variable_descriptor_count_allocate_info :=
+        vk.DescriptorSetVariableDescriptorCountAllocateInfo {
+            sType              = .DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+            descriptorSetCount = 1,
+            pDescriptorCounts  = &variable_descriptor_count,
+        }
+    descriptor_set_allocate_info := vk.DescriptorSetAllocateInfo {
+            sType              = .DESCRIPTOR_SET_ALLOCATE_INFO,
+            pNext              = &variable_descriptor_count_allocate_info,
+            descriptorPool     = renderer.descriptor_pool,
+            descriptorSetCount = 1,
+            pSetLayouts        = &renderer.pipeline.descriptor_set_layout,
+        }
+    check_success(
+        vk.AllocateDescriptorSets(
+            vk_device,
+            &descriptor_set_allocate_info,
+            &renderer.descriptor_set,
+        ),
+        "Failed to allocate descriptor set",
+    ) or_return
 
     return renderer, true
 }
@@ -389,6 +435,10 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     vk.DeviceWaitIdle(vk_device)
 
     destroy_texture(&renderer.background_texture, gpu_context)
+
+    if renderer.descriptor_pool != 0 {
+        vk.DestroyDescriptorPool(vk_device, renderer.descriptor_pool, nil)
+    }
 
     destroy_pipeline(&renderer.pipeline, gpu_context)
 

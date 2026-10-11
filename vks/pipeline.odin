@@ -21,6 +21,7 @@ create_pipeline :: proc(gpu_context: Gpu_Context) -> (pipeline: Pipeline, ok: bo
 
     // Create descriptor set layout
     descriptor_set_layout_binding := vk.DescriptorSetLayoutBinding {
+        // Corresponds to the binding, the first number in `[[vk::binding(0, 0)]]`
         binding         = 0,
         descriptorType  = .COMBINED_IMAGE_SAMPLER,
         descriptorCount = MAX_TEXTURES,
@@ -32,6 +33,7 @@ create_pipeline :: proc(gpu_context: Gpu_Context) -> (pipeline: Pipeline, ok: bo
         bindingCount  = 1,
         pBindingFlags = &descriptor_binding_flags,
     }
+    // The set (second number in `[[vk::binding(0, 0)]]`) is this layout's index in the pipeline layout
     descriptor_set_layout_create_info := vk.DescriptorSetLayoutCreateInfo {
         sType        = .DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
         pNext        = &descriptor_binding_flags_create_info,

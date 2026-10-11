@@ -83,13 +83,8 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
 }
 
 @(require_results)
-set_background_image :: proc(window: ^Window, image_path: string) -> (ok: bool) {
-    window.vulkan_renderer.background_texture = vks.create_texture(
-        window.vulkan_context,
-        image_path,
-    ) or_return
-
-    return true
+set_background_image :: proc(window: ^Window, image_path: string) -> bool {
+    return vks.set_background(&window.vulkan_renderer, window.vulkan_context, image_path)
 }
 
 loop_until_close :: proc(window: ^Window) {

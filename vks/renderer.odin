@@ -428,6 +428,39 @@ advance_frame :: proc(renderer: ^Renderer) {
     renderer.frame_index = (renderer.frame_index + 1) % FRAMES_IN_FLIGHT
 }
 
+@(require_results)
+set_background :: proc(
+    renderer: ^Renderer,
+    gpu_context: Gpu_Context,
+    image_path: string,
+) -> (
+    ok: bool,
+) {
+    // Create background texture
+    renderer.background_texture = create_texture(gpu_context, image_path) or_return
+
+    // Write texture into the descriptor
+    background_image_info := vk.DescriptorImageInfo {
+        sampler     = renderer.background_texture.sampler,
+        imageView   = renderer.background_texture.view,
+        imageLayout = .SHADER_READ_ONLY_OPTIMAL,
+    }
+
+    background_descriptor_write := vk.WriteDescriptorSet {
+        sType           = .WRITE_DESCRIPTOR_SET,
+        dstSet          = renderer.descriptor_set,
+        // Corresponds to the binding, the first number in `[[vk::binding(0, 0)]]`
+        dstBinding      = 0,
+        dstArrayElement = 0,
+        descriptorCount = 1,
+        descriptorType  = .COMBINED_IMAGE_SAMPLER,
+        pImageInfo      = &background_image_info,
+    }
+    vk.UpdateDescriptorSets(gpu_context.device.vk_device, 1, &background_descriptor_write, 0, nil)
+
+    return true
+}
+
 destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     log.info("Destroying Renderer")
     // Device needs to be idle to destroy resources

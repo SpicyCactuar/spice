@@ -296,13 +296,16 @@ render_frame :: proc(
     }
     vk.CmdPipelineBarrier2(command_buffer, &swapchain_image_transition_dependency_info)
 
+    clear_value := vk.ClearValue {
+        color = {float32 = CLEAR_COLOR},
+    }
     color_attachment := vk.RenderingAttachmentInfo {
         sType       = .RENDERING_ATTACHMENT_INFO,
         imageView   = renderer.swapchain.image_views[image_index],
         imageLayout = .ATTACHMENT_OPTIMAL,
         loadOp      = .CLEAR,
         storeOp     = .STORE,
-        clearValue  = CLEAR_COLOR,
+        clearValue  = clear_value,
     }
     render_area := vk.Rect2D {
         extent = swapchain_extent(renderer.swapchain),
@@ -522,6 +525,4 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
 FRAMES_IN_FLIGHT :: u32(2)
 
 @(private = "file")
-CLEAR_COLOR := vk.ClearValue {
-    color = {float32 = {0.1, 0.2, 0.4, 1.0}},
-}
+CLEAR_COLOR :: [4]f32{0.1, 0.2, 0.4, 1.0}

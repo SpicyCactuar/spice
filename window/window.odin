@@ -1,9 +1,9 @@
 package window
 
 import "../vks"
-import "core:fmt"
 import "core:log"
 import "core:slice"
+import "core:strings"
 import "vendor:glfw"
 
 Window :: struct {
@@ -35,7 +35,13 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
     window.title = title
     window.width = width
     window.height = height
-    window.handle = glfw.CreateWindow(width, height, fmt.ctprintf("%s", title), nil, nil)
+    window.handle = glfw.CreateWindow(
+        width,
+        height,
+        strings.clone_to_cstring(title, context.temp_allocator),
+        nil,
+        nil,
+    )
     if window.handle == nil {
         log.error("Could not create GLFW window")
         return
@@ -74,7 +80,7 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
         window = window.handle,
     )
     if !renderer_initialized {
-        log.errorf("Failed to initialize Renderer")
+        log.error("Failed to initialize Renderer")
         return
     }
     window.vulkan_renderer = renderer

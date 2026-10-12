@@ -8,8 +8,6 @@ import "vendor:glfw"
 
 Window :: struct {
     handle:          glfw.WindowHandle,
-    title:           string,
-    width, height:   i32,
     vulkan_context:  vks.Gpu_Context,
     vulkan_renderer: vks.Renderer,
 }
@@ -32,9 +30,6 @@ create :: proc(title: string, width, height: i32) -> (window: Window, ok: bool) 
     glfw.WindowHint(glfw.RESIZABLE, glfw.TRUE)
     glfw.WindowHint(glfw.CLIENT_API, glfw.NO_API)
 
-    window.title = title
-    window.width = width
-    window.height = height
     window.handle = glfw.CreateWindow(
         width,
         height,

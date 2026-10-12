@@ -4,7 +4,6 @@ import "core:bytes"
 import "core:image"
 import _ "core:image/jpeg"
 import "core:log"
-import "core:mem"
 import vma "libs:odin-vma"
 import vk "vendor:vulkan"
 
@@ -85,6 +84,7 @@ create_texture :: proc(
 
     // Fill staging buffer
     image_pixels := bytes.buffer_to_bytes(&texture_image.pixels)
+    image_size_in_bytes := len(image_pixels)
 
     staging_buffer: vk.Buffer
     staging_allocation: vma.Allocation
@@ -93,12 +93,13 @@ create_texture :: proc(
     buffer_create_info := vk.BufferCreateInfo {
         sType = .BUFFER_CREATE_INFO,
         pNext = nil,
-        size  = vk.DeviceSize(len(image_pixels)),
+        size  = vk.DeviceSize(image_size_in_bytes),
         usage = {.TRANSFER_SRC},
     }
     allocation_create_info := vma.AllocationCreateInfo {
         usage = .AUTO,
-        flags = {.HOST_ACCESS_SEQUENTIAL_WRITE, .MAPPED},
+        // Filled once via vma.CopyMemoryToAllocation, so no persistent mapping (ie: .MAPPED)
+        flags = {.HOST_ACCESS_SEQUENTIAL_WRITE},
     }
     check_success(
         vma.CreateBuffer(
@@ -113,6 +114,17 @@ create_texture :: proc(
     ) or_return
     defer vma.DestroyBuffer(gpu_context.vma_allocator, staging_buffer, staging_allocation)
 
+    check_success(
+        vma.CopyMemoryToAllocation(
+            gpu_context.vma_allocator,
+            raw_data(image_pixels),
+            staging_allocation,
+            0, // No offset inside the allocation
+            vk.DeviceSize(image_size_in_bytes),
+        ),
+        "Failed to fill staging buffer",
+    ) or_return
+
     staging_memory_properties: vk.MemoryPropertyFlags
     vma.GetAllocationMemoryProperties(
         gpu_context.vma_allocator,
@@ -120,23 +132,11 @@ create_texture :: proc(
         &staging_memory_properties,
     )
 
-    mem.copy(staging_allocation_info.pMappedData, raw_data(image_pixels), len(image_pixels))
-    check_success(
-        vma.FlushAllocation(
-            gpu_context.vma_allocator,
-            staging_allocation,
-            0,
-            vk.DeviceSize(len(image_pixels)),
-        ),
-        "Failed to flush staging buffer",
-    ) or_return
-
     log.infof(
-        "Created staging buffer: size = %d bytes, memory type = %d, properties = %v, mapped = %p",
+        "Created staging buffer: allocated = %d bytes, memory type = %d, properties = %v",
         staging_allocation_info.size,
         staging_allocation_info.memoryType,
         staging_memory_properties,
-        staging_allocation_info.pMappedData,
     )
 
     // Create vk.Image

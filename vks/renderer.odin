@@ -316,7 +316,29 @@ render_frame :: proc(
     }
 
     vk.CmdBeginRendering(command_buffer, &rendering_info)
-    // TODO: Submit draw calls
+    vk.CmdBindPipeline(command_buffer, .GRAPHICS, renderer.pipeline.pipeline)
+    viewport := vk.Viewport {
+        x        = 0,
+        y        = 0,
+        width    = f32(render_area.extent.width),
+        height   = f32(render_area.extent.height),
+        minDepth = 0,
+        maxDepth = 1,
+    }
+    vk.CmdSetViewport(command_buffer, 0, 1, &viewport)
+    vk.CmdSetScissor(command_buffer, 0, 1, &render_area)
+    vk.CmdBindDescriptorSets(
+        command_buffer,
+        .GRAPHICS,
+        renderer.pipeline.layout,
+        // Corresponds to the set, the second number in `[[vk::binding(0, 0)]]`
+        0,
+        1,
+        &renderer.descriptor_set,
+        0,
+        nil,
+    )
+    vk.CmdDraw(command_buffer, 3, 1, 0, 0)
     vk.CmdEndRendering(command_buffer)
 
     swapchain_image_present_barrier := vk.ImageMemoryBarrier2 {

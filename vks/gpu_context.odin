@@ -93,6 +93,10 @@ create_gpu_context :: proc(
         &physical_device_selector,
         {synchronization2 = true, dynamicRendering = true},
     )
+    vkb.physical_device_selector_set_required_features_14(
+        &physical_device_selector,
+        {maintenance5 = true},
+    )
 
     check_success(
         vkb.physical_device_selector_select(

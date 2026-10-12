@@ -28,8 +28,6 @@ create_renderer :: proc(
     renderer: Renderer,
     ok: bool,
 ) {
-    log.info("Creating graphics pipeline")
-
     defer if !ok {
         destroy_renderer(&renderer, gpu_context)
     }
@@ -145,8 +143,6 @@ create_renderer :: proc(
         ),
         "Failed to allocate descriptor set",
     ) or_return
-
-    log.info("Created graphics pipeline")
 
     return renderer, true
 }

@@ -19,6 +19,8 @@ create_pipeline :: proc(
     pipeline: Pipeline,
     ok: bool,
 ) {
+    log.info("Creating graphics pipeline")
+
     defer if !ok {
         destroy_pipeline(&pipeline, gpu_context)
     }
@@ -68,30 +70,26 @@ create_pipeline :: proc(
         "Failed to create pipeline layout",
     ) or_return
 
-    // Create shaders
-    fullscreen_shader_module, fullscreen_shader_created := create_shader_module(
-        #load(FULLSCREEN_SPIRV_PATH),
-        vk_device,
-    )
-    defer vk.DestroyShaderModule(vk_device, fullscreen_shader_module, nil)
-
-    if !fullscreen_shader_created {
-        log.errorf("Failed to create shader module for %s", FULLSCREEN_SPIRV_PATH)
-        return
+    // Setup pipeline stages
+    spirv := #load(FULLSCREEN_SPIRV_PATH, []u32)
+    shader_module_create_info := vk.ShaderModuleCreateInfo {
+        sType    = .SHADER_MODULE_CREATE_INFO,
+        pNext    = nil,
+        codeSize = slice.size(spirv),
+        pCode    = raw_data(spirv),
     }
 
-    // Setup pipeline stages
     shader_stages := [?]vk.PipelineShaderStageCreateInfo {
         {
             sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+            pNext = &shader_module_create_info,
             stage = {.VERTEX},
-            module = fullscreen_shader_module,
             pName = SHADER_ENTRY_POINT,
         },
         {
             sType = .PIPELINE_SHADER_STAGE_CREATE_INFO,
+            pNext = &shader_module_create_info,
             stage = {.FRAGMENT},
-            module = fullscreen_shader_module,
             pName = SHADER_ENTRY_POINT,
         },
     }
@@ -178,31 +176,9 @@ create_pipeline :: proc(
         "Failed to create graphics pipeline",
     ) or_return
 
+    log.info("Created graphics pipeline")
+
     return pipeline, true
-}
-
-@(private = "file")
-@(require_results)
-create_shader_module :: proc(
-    spirv: []u32,
-    vk_device: vk.Device,
-) -> (
-    shader_module: vk.ShaderModule,
-    ok: bool,
-) {
-    shader_create_info := vk.ShaderModuleCreateInfo {
-        sType    = .SHADER_MODULE_CREATE_INFO,
-        pNext    = nil,
-        codeSize = slice.size(spirv),
-        pCode    = raw_data(spirv),
-    }
-
-    check_success(
-        vk.CreateShaderModule(vk_device, &shader_create_info, nil, &shader_module),
-        "Failed to create shader module",
-    ) or_return
-
-    return shader_module, true
 }
 
 @(private)

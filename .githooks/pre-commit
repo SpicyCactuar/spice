@@ -1,0 +1,23 @@
+#!/bin/sh
+# Type-checks spice and its build program before every commit.
+# Enable once per clone: git config core.hooksPath .githooks — skip once: git commit --no-verify
+cd "$(git rev-parse --show-toplevel)" || exit 1
+
+# Odin can't exclude packages, so restrict checks to the packages declared outside libs/
+PACKAGES=$(grep -rh --include='*.odin' --exclude-dir=libs '^package ' . | awk '{ print $2 }' | sort -u | paste -sd, -)
+
+FLAGS="-vet -strict-style -vet-cast -vet-using-param -disallow-do -warnings-as-errors"
+FLAGS="$FLAGS -vet-packages:$PACKAGES -strict-style-packages:$PACKAGES"
+
+echo "pre-commit: checking packages $PACKAGES"
+
+# Flags before `--` check the build program, flags after it check spice.
+# Compiler and shader errors are printed above the failure message.
+if odin run build $FLAGS -- check $FLAGS; then
+    echo "pre-commit: check passed"
+else
+    status=$?
+    echo "pre-commit: check failed (exit code $status), see the errors above. Commit aborted." >&2
+    echo "pre-commit: fix them, or skip the check once with: git commit --no-verify" >&2
+    exit "$status"
+fi

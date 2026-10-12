@@ -175,6 +175,11 @@ create_swapchain_builder :: proc(
 }
 
 @(private)
+swapchain_format :: proc(swapchain: Swapchain) -> vk.Format {
+    return swapchain.vkb_swapchain.vk_image_format
+}
+
+@(private)
 destroy_swapchain :: proc(swapchain: ^Swapchain, gpu_context: Gpu_Context) {
     vk_device := gpu_context.device.vk_device
     for semaphore in swapchain.render_complete_semaphores {

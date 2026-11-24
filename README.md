@@ -25,7 +25,7 @@ Resources followed:
 - [Slang](https://github.com/shader-slang/slang/releases) (`slangc` on your `PATH`)
 - A Vulkan 1.4 driver supporting `descriptorIndexing` and `descriptorBindingVariableDescriptorCount` (the other features spice enables are guaranteed by Vulkan 1.4)
 - On Linux, GLFW 3 installed system-wide (developed with 3.4, e.g. `libglfw3-dev` on Debian/Ubuntu)
-- In debug builds, the Vulkan validation layers (`VK_LAYER_KHRONOS_validation`)
+- In debug builds, the Vulkan validation layers (`VK_LAYER_KHRONOS_validation`) with `VK_EXT_layer_settings`, e.g. from the [Vulkan SDK](https://vulkan.lunarg.com/sdk/home). Debug builds turn on synchronization validation.
 
 Developed on Linux (WSL2). Other platforms are untested.
 
@@ -62,6 +62,12 @@ The build program compiles the shaders, then passes everything after `--` to `od
 
 ```bash
 odin run build -out=bin/build -- run -debug -out=bin/spice
+```
+
+In debug builds, GPU-assisted validation can be turned on (slow; off by default):
+
+```bash
+odin run build -out=bin/build -- run -debug -define:GPU_ASSISTED_VALIDATION=true -out=bin/spice
 ```
 
 ## License

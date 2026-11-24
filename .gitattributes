@@ -1,0 +1,3 @@
+# Store text files with LF line endings and check them out as LF on every platform,
+# so files saved from Windows editors don't bring CRLF into the repository.
+* text=auto eol=lf

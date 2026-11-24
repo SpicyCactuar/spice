@@ -1,6 +1,5 @@
 package vks
 
-import "base:runtime"
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
 import vma "libs:odin-vma"
@@ -37,23 +36,14 @@ create_gpu_context :: proc(
     vkb.instance_builder_enable_extensions(&instance_builder, instance_extensions)
     vkb.instance_builder_require_api_version(&instance_builder, VULKAN_VERSION)
 
-    when ODIN_DEBUG {
-        debug_messenger_logger = context.logger
-        vkb.instance_builder_enable_validation_layers(&instance_builder)
-        vkb.instance_builder_set_debug_callback(&instance_builder, debug_messenger_callback)
-    }
+    enable_validation(&instance_builder)
 
     check_success(
         vkb.instance_builder_build(&instance_builder, &gpu_context.instance),
         "Failed to build Vulkan instance",
     ) or_return
 
-    when ODIN_DEBUG {
-        log.info("Enabled Vulkan validation layers")
-        if gpu_context.instance.vk_debug_messenger != 0 {
-            log.info("Enabled Vulkan debug messenger")
-        }
-    }
+    log_validation_status(gpu_context.instance)
 
     // Surface
     check_success(
@@ -157,6 +147,8 @@ create_gpu_context :: proc(
     }
     gpu_context.queue_family_index = graphics_index
     vk.GetDeviceQueue(gpu_context.device.vk_device, graphics_index, 0, &gpu_context.queue)
+    set_debug_name(gpu_context, .DEVICE, u64(uintptr(gpu_context.device.vk_device)), "device")
+    set_debug_name(gpu_context, .QUEUE, u64(uintptr(gpu_context.queue)), "graphics/present queue")
     log.infof(
         "Using queue 0 of family %d for graphics and present",
         gpu_context.queue_family_index,
@@ -184,39 +176,6 @@ destroy_gpu_context :: proc(gpu_context: ^Gpu_Context) {
     if gpu_context.instance.vk_instance != nil {
         vkb.destroy_instance(&gpu_context.instance)
     }
-}
-
-// Vulkan calls the debug callback without an Odin context, so the callback
-// can't see the caller's `context.logger`. This keeps a copy for it to use.
-@(private = "file")
-debug_messenger_logger: log.Logger
-
-// Forwards validation layer and debug utils messages to `log`, mapping Vulkan
-// severity to the matching log level.
-@(private = "file")
-debug_messenger_callback :: proc "system" (
-    message_severity: vk.DebugUtilsMessageSeverityFlagsEXT,
-    message_types: vk.DebugUtilsMessageTypeFlagsEXT,
-    callback_data: ^vk.DebugUtilsMessengerCallbackDataEXT,
-    user_data: rawptr,
-) -> b32 {
-    context = runtime.default_context()
-    context.logger = debug_messenger_logger
-
-    level: log.Level
-    switch {
-    case .ERROR in message_severity:
-        level = .Error
-    case .WARNING in message_severity:
-        level = .Warning
-    case .INFO in message_severity:
-        level = .Info
-    case:
-        level = .Debug
-    }
-
-    log.logf(level, "[Vulkan %v] %s", message_types, callback_data.pMessage)
-    return false // Applications must return false here
 }
 
 @(private = "file")

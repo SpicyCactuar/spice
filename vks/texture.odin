@@ -1,6 +1,7 @@
 package vks
 
 import "core:bytes"
+import "core:fmt"
 import "core:image"
 import _ "core:image/jpeg"
 import "core:log"
@@ -112,6 +113,12 @@ create_texture :: proc(
         ),
         "Failed to create staging buffer",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .BUFFER,
+        u64(staging_buffer),
+        fmt.ctprintf("%s staging buffer", image_path),
+    )
     defer vma.DestroyBuffer(gpu_context.vma_allocator, staging_buffer, staging_allocation)
 
     check_success(
@@ -169,6 +176,7 @@ create_texture :: proc(
         ),
         "Failed to create texture image",
     ) or_return
+    set_debug_name(gpu_context, .IMAGE, u64(texture.image), fmt.ctprintf("%s image", image_path))
 
     // Start recording upload commands
     upload_command_pool_info := vk.CommandPoolCreateInfo {
@@ -188,6 +196,12 @@ create_texture :: proc(
         ),
         "Failed to create image upload command pool",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .COMMAND_POOL,
+        u64(upload_command_pool),
+        fmt.ctprintf("%s upload command pool", image_path),
+    )
     defer vk.DestroyCommandPool(gpu_context.device.vk_device, upload_command_pool, nil)
 
     upload_command_buffer_info := vk.CommandBufferAllocateInfo {
@@ -206,6 +220,12 @@ create_texture :: proc(
         ),
         "Failed to allocate image upload command buffer",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .COMMAND_BUFFER,
+        u64(uintptr(upload_command_buffer)),
+        fmt.ctprintf("%s upload command buffer", image_path),
+    )
 
     upload_begin_info := vk.CommandBufferBeginInfo {
         sType = .COMMAND_BUFFER_BEGIN_INFO,
@@ -303,6 +323,12 @@ create_texture :: proc(
         vk.CreateFence(gpu_context.device.vk_device, &fence_create_info, nil, &upload_fence),
         "Failed to create texture image upload fence",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .FENCE,
+        u64(upload_fence),
+        fmt.ctprintf("%s upload fence", image_path),
+    )
     defer vk.DestroyFence(gpu_context.device.vk_device, upload_fence, nil)
 
     upload_command_buffer_submit_info := vk.CommandBufferSubmitInfo {
@@ -337,6 +363,12 @@ create_texture :: proc(
         vk.CreateImageView(gpu_context.device.vk_device, &view_create_info, nil, &texture.view),
         "Failed to create texture image view",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .IMAGE_VIEW,
+        u64(texture.view),
+        fmt.ctprintf("%s image view", image_path),
+    )
 
     max_anisotropy := min(
         TEXTURE_MAX_ANISOTROPY,
@@ -365,6 +397,12 @@ create_texture :: proc(
         ),
         "Failed to create texture sampler",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .SAMPLER,
+        u64(texture.sampler),
+        fmt.ctprintf("%s sampler", image_path),
+    )
 
     log.infof("Created texture %s", image_path)
 

@@ -1,5 +1,6 @@
 package vks
 
+import "core:fmt"
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
 import "vendor:glfw"
@@ -51,6 +52,7 @@ create_renderer :: proc(
         vk.CreateCommandPool(vk_device, &command_pool_create_info, nil, &renderer.command_pool),
         "Failed to create command pool",
     ) or_return
+    set_debug_name(gpu_context, .COMMAND_POOL, u64(renderer.command_pool), "frame command pool")
 
     command_buffer_allocate_info := vk.CommandBufferAllocateInfo {
         sType              = .COMMAND_BUFFER_ALLOCATE_INFO,
@@ -67,6 +69,14 @@ create_renderer :: proc(
         ),
         "Failed to create command buffers",
     ) or_return
+    for command_buffer, index in renderer.command_buffers {
+        set_debug_name(
+            gpu_context,
+            .COMMAND_BUFFER,
+            u64(uintptr(command_buffer)),
+            fmt.ctprintf("frame command buffer #%d", index),
+        )
+    }
 
     // Synchronization
     fence_create_info := vk.FenceCreateInfo {
@@ -80,6 +90,7 @@ create_renderer :: proc(
             "Failed to create fence #%d",
             index,
         ) or_return
+        set_debug_name(gpu_context, .FENCE, u64(fence), fmt.ctprintf("frame fence #%d", index))
     }
 
     semaphore_create_info := vk.SemaphoreCreateInfo {
@@ -92,6 +103,12 @@ create_renderer :: proc(
             "Failed to create image acquired semaphore #%d",
             index,
         ) or_return
+        set_debug_name(
+            gpu_context,
+            .SEMAPHORE,
+            u64(semaphore),
+            fmt.ctprintf("image acquired semaphore #%d", index),
+        )
     }
 
     // Pipeline
@@ -120,6 +137,12 @@ create_renderer :: proc(
         ),
         "Failed to create descriptor pool",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .DESCRIPTOR_POOL,
+        u64(renderer.descriptor_pool),
+        "texture descriptor pool",
+    )
 
     variable_descriptor_count := u32(MAX_TEXTURES)
     variable_descriptor_count_allocate_info :=
@@ -143,6 +166,7 @@ create_renderer :: proc(
         ),
         "Failed to allocate descriptor set",
     ) or_return
+    set_debug_name(gpu_context, .DESCRIPTOR_SET, u64(renderer.descriptor_set), "texture descriptor set")
 
     return renderer, true
 }
@@ -344,7 +368,7 @@ render_frame :: proc(
         sType            = .IMAGE_MEMORY_BARRIER_2,
         srcStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
         srcAccessMask    = {.COLOR_ATTACHMENT_WRITE},
-        dstStageMask     = {},
+        dstStageMask     = {.COLOR_ATTACHMENT_OUTPUT},
         dstAccessMask    = {},
         oldLayout        = .ATTACHMENT_OPTIMAL,
         newLayout        = .PRESENT_SRC_KHR,

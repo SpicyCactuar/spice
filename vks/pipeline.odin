@@ -57,6 +57,12 @@ create_pipeline :: proc(
         ),
         "Failed to create descriptor set layout",
     ) or_return
+    set_debug_name(
+        gpu_context,
+        .DESCRIPTOR_SET_LAYOUT,
+        u64(pipeline.descriptor_set_layout),
+        "texture descriptor set layout",
+    )
 
     // Create pipeline layout
     pipeline_layout_create_info := vk.PipelineLayoutCreateInfo {
@@ -69,6 +75,7 @@ create_pipeline :: proc(
         vk.CreatePipelineLayout(vk_device, &pipeline_layout_create_info, nil, &pipeline.layout),
         "Failed to create pipeline layout",
     ) or_return
+    set_debug_name(gpu_context, .PIPELINE_LAYOUT, u64(pipeline.layout), "fullscreen pipeline layout")
 
     // Setup pipeline stages
     spirv := #load(FULLSCREEN_SPIRV_PATH, []u32)
@@ -175,6 +182,7 @@ create_pipeline :: proc(
         ),
         "Failed to create graphics pipeline",
     ) or_return
+    set_debug_name(gpu_context, .PIPELINE, u64(pipeline.pipeline), "fullscreen pipeline")
 
     log.info("Created graphics pipeline")
 

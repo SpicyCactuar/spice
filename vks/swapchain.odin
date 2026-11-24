@@ -1,5 +1,6 @@
 package vks
 
+import "core:fmt"
 import "core:log"
 import vkb "libs:odin-vk-bootstrap"
 import "vendor:glfw"
@@ -26,6 +27,7 @@ create_swapchain :: proc(
         vkb.swapchain_builder_build(swapchain_builder, &swapchain.vkb_swapchain),
         "Failed to build swapchain",
     ) or_return
+    set_debug_name(gpu_context, .SWAPCHAIN_KHR, u64(swapchain_handle(swapchain^)), "swapchain")
 
     log.infof(
         "Built swapchain: %d image(s), %d x %d, %v, %v",
@@ -47,6 +49,18 @@ create_swapchain :: proc(
         "Failed to create swapchain image views",
     ) or_return
 
+    for image, index in swapchain.images {
+        set_debug_name(gpu_context, .IMAGE, u64(image), fmt.ctprintf("swapchain image #%d", index))
+    }
+    for image_view, index in swapchain.image_views {
+        set_debug_name(
+            gpu_context,
+            .IMAGE_VIEW,
+            u64(image_view),
+            fmt.ctprintf("swapchain image view #%d", index),
+        )
+    }
+
     semaphore_create_info := vk.SemaphoreCreateInfo {
         sType = .SEMAPHORE_CREATE_INFO,
         pNext = nil,
@@ -63,6 +77,12 @@ create_swapchain :: proc(
             "Failed to create render complete semaphore #%d",
             index,
         ) or_return
+        set_debug_name(
+            gpu_context,
+            .SEMAPHORE,
+            u64(semaphore),
+            fmt.ctprintf("render complete semaphore #%d", index),
+        )
     }
 
     return true

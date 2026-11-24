@@ -2,6 +2,7 @@ package vks
 
 import "core:fmt"
 import "core:log"
+import "core:mem"
 import vkb "libs:odin-vk-bootstrap"
 import "vendor:glfw"
 import vk "vendor:vulkan"
@@ -166,7 +167,12 @@ create_renderer :: proc(
         ),
         "Failed to allocate descriptor set",
     ) or_return
-    set_debug_name(gpu_context, .DESCRIPTOR_SET, u64(renderer.descriptor_set), "texture descriptor set")
+    set_debug_name(
+        gpu_context,
+        .DESCRIPTOR_SET,
+        u64(renderer.descriptor_set),
+        "texture descriptor set",
+    )
 
     return renderer, true
 }
@@ -539,6 +545,7 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     }
 
     destroy_swapchain(&renderer.swapchain, gpu_context)
+    mem.zero_item(renderer)
 }
 
 @(private = "file")

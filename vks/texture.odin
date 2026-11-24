@@ -5,6 +5,7 @@ import "core:fmt"
 import "core:image"
 import _ "core:image/jpeg"
 import "core:log"
+import mem "core:mem"
 import vma "libs:odin-vma"
 import vk "vendor:vulkan"
 
@@ -420,6 +421,7 @@ destroy_texture :: proc(texture: ^Texture, gpu_context: Gpu_Context) {
     if texture.image != 0 {
         vma.DestroyImage(gpu_context.vma_allocator, texture.image, texture.allocation)
     }
+    mem.zero_item(texture)
 }
 
 @(private = "file")

@@ -1,6 +1,7 @@
 package vks
 
 import "core:log"
+import "core:mem"
 import "core:slice"
 import vk "vendor:vulkan"
 
@@ -75,7 +76,12 @@ create_pipeline :: proc(
         vk.CreatePipelineLayout(vk_device, &pipeline_layout_create_info, nil, &pipeline.layout),
         "Failed to create pipeline layout",
     ) or_return
-    set_debug_name(gpu_context, .PIPELINE_LAYOUT, u64(pipeline.layout), "fullscreen pipeline layout")
+    set_debug_name(
+        gpu_context,
+        .PIPELINE_LAYOUT,
+        u64(pipeline.layout),
+        "fullscreen pipeline layout",
+    )
 
     // Setup pipeline stages
     spirv := #load(FULLSCREEN_SPIRV_PATH, []u32)
@@ -206,6 +212,7 @@ destroy_pipeline :: proc(pipeline: ^Pipeline, gpu_context: Gpu_Context) {
             nil,
         )
     }
+    mem.zero_item(pipeline)
 }
 
 @(private = "file")

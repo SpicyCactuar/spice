@@ -2,6 +2,7 @@ package vks
 
 import "core:fmt"
 import "core:log"
+import mem "core:mem"
 import vkb "libs:odin-vk-bootstrap"
 import "vendor:glfw"
 import vk "vendor:vulkan"
@@ -116,7 +117,7 @@ recreate_swapchain :: proc(
     // The old swapchain is handed to the new one as `oldSwapchain`, so it must outlive the build.
     // It is retired either way, so it is destroyed whether the build succeeds or not.
     old_swapchain := swapchain^
-    swapchain^ = {}
+    mem.zero_item(swapchain)
     defer destroy_swapchain(&old_swapchain, gpu_context)
 
     swapchain_builder: vkb.Swapchain_Builder
@@ -217,4 +218,6 @@ destroy_swapchain :: proc(swapchain: ^Swapchain, gpu_context: Gpu_Context) {
     if swapchain_handle(swapchain^) != 0 {
         vkb.destroy_swapchain(&swapchain.vkb_swapchain)
     }
+
+    mem.zero_item(swapchain)
 }

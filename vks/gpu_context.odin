@@ -1,6 +1,7 @@
 package vks
 
 import "core:log"
+import "core:mem"
 import vkb "libs:odin-vk-bootstrap"
 import vma "libs:odin-vma"
 import "vendor:glfw"
@@ -176,6 +177,7 @@ destroy_gpu_context :: proc(gpu_context: ^Gpu_Context) {
     if gpu_context.instance.vk_instance != nil {
         vkb.destroy_instance(&gpu_context.instance)
     }
+    mem.zero_item(gpu_context)
 }
 
 @(private = "file")

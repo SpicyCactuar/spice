@@ -8,17 +8,19 @@ import "vendor:glfw"
 import vk "vendor:vulkan"
 
 Renderer :: struct {
-    swapchain:                 Swapchain,
-    swapchain_out_of_date:     bool,
-    command_pool:              vk.CommandPool,
-    command_buffers:           [FRAMES_IN_FLIGHT]vk.CommandBuffer,
-    fences:                    [FRAMES_IN_FLIGHT]vk.Fence,
-    image_acquired_semaphores: [FRAMES_IN_FLIGHT]vk.Semaphore,
-    frame_index:               u32,
-    pipeline:                  Pipeline,
-    background_texture:        Texture,
-    descriptor_pool:           vk.DescriptorPool,
-    descriptor_set:            vk.DescriptorSet,
+    swapchain:                   Swapchain,
+    swapchain_out_of_date:       bool,
+    command_pool:                vk.CommandPool,
+    command_buffers:             [FRAMES_IN_FLIGHT]vk.CommandBuffer,
+    frame_semaphore:             vk.Semaphore,
+    frame_semaphore_submissions: u64,
+    frame_semaphore_values:      [FRAMES_IN_FLIGHT]u64,
+    image_acquired_semaphores:   [FRAMES_IN_FLIGHT]vk.Semaphore,
+    frame_index:                 u32,
+    pipeline:                    Pipeline,
+    background_texture:          Texture,
+    descriptor_pool:             vk.DescriptorPool,
+    descriptor_set:              vk.DescriptorSet,
 }
 
 // TODO: Document
@@ -80,19 +82,30 @@ create_renderer :: proc(
     }
 
     // Synchronization
-    fence_create_info := vk.FenceCreateInfo {
-        sType = .FENCE_CREATE_INFO,
-        pNext = nil,
-        flags = {.SIGNALED},
+    frame_semaphore_type_info := vk.SemaphoreTypeCreateInfo {
+        sType         = .SEMAPHORE_TYPE_CREATE_INFO,
+        semaphoreType = .TIMELINE,
+        initialValue  = 0,
     }
-    for &fence, index in renderer.fences {
-        check_success(
-            vk.CreateFence(vk_device, &fence_create_info, nil, &fence),
-            "Failed to create fence #%d",
-            index,
-        ) or_return
-        set_debug_name(gpu_context, .FENCE, u64(fence), fmt.ctprintf("frame fence #%d", index))
+    frame_semaphore_create_info := vk.SemaphoreCreateInfo {
+        sType = .SEMAPHORE_CREATE_INFO,
+        pNext = &frame_semaphore_type_info,
     }
+    check_success(
+        vk.CreateSemaphore(
+            vk_device,
+            &frame_semaphore_create_info,
+            nil,
+            &renderer.frame_semaphore,
+        ),
+        "Failed to create frame timeline semaphore",
+    ) or_return
+    set_debug_name(
+        gpu_context,
+        .SEMAPHORE,
+        u64(renderer.frame_semaphore),
+        "frame timeline semaphore",
+    )
 
     semaphore_create_info := vk.SemaphoreCreateInfo {
         sType = .SEMAPHORE_CREATE_INFO,
@@ -146,19 +159,18 @@ create_renderer :: proc(
     )
 
     variable_descriptor_count := u32(MAX_TEXTURES)
-    variable_descriptor_count_allocate_info :=
-        vk.DescriptorSetVariableDescriptorCountAllocateInfo {
-            sType              = .DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
-            descriptorSetCount = 1,
-            pDescriptorCounts  = &variable_descriptor_count,
-        }
+    variable_descriptor_count_info := vk.DescriptorSetVariableDescriptorCountAllocateInfo {
+        sType              = .DESCRIPTOR_SET_VARIABLE_DESCRIPTOR_COUNT_ALLOCATE_INFO,
+        descriptorSetCount = 1,
+        pDescriptorCounts  = &variable_descriptor_count,
+    }
     descriptor_set_allocate_info := vk.DescriptorSetAllocateInfo {
-            sType              = .DESCRIPTOR_SET_ALLOCATE_INFO,
-            pNext              = &variable_descriptor_count_allocate_info,
-            descriptorPool     = renderer.descriptor_pool,
-            descriptorSetCount = 1,
-            pSetLayouts        = &renderer.pipeline.descriptor_set_layout,
-        }
+        sType              = .DESCRIPTOR_SET_ALLOCATE_INFO,
+        pNext              = &variable_descriptor_count_info,
+        descriptorPool     = renderer.descriptor_pool,
+        descriptorSetCount = 1,
+        pSetLayouts        = &renderer.pipeline.descriptor_set_layout,
+    }
     check_success(
         vk.AllocateDescriptorSets(
             vk_device,
@@ -229,10 +241,17 @@ prepare_frame :: proc(
     ok: bool,
 ) {
     frame := renderer.frame_index
-    // With an infinite timeout, WaitForFences can't return TIMEOUT, so anything but SUCCESS is an error.
+
+    // With an infinite timeout, WaitSemaphores can't return TIMEOUT, so anything but SUCCESS is an error.
+    frame_semaphore_wait_info := vk.SemaphoreWaitInfo {
+        sType          = .SEMAPHORE_WAIT_INFO,
+        semaphoreCount = 1,
+        pSemaphores    = &renderer.frame_semaphore,
+        pValues        = &renderer.frame_semaphore_values[frame],
+    }
     check_success(
-        vk.WaitForFences(vk_device, 1, &renderer.fences[frame], true, max(u64)),
-        "Failed to wait for fence in frame %d",
+        vk.WaitSemaphores(vk_device, &frame_semaphore_wait_info, max(u64)),
+        "Failed to wait for frame %d",
         frame,
     ) or_return
 
@@ -263,12 +282,6 @@ prepare_frame :: proc(
         log.errorf("Failed to acquire swapchain image in frame %d: %v", frame, acquire_result)
         return
     }
-
-    check_success(
-        vk.ResetFences(vk_device, 1, &renderer.fences[frame]),
-        "Failed to reset fence in frame %d",
-        frame,
-    ) or_return
 
     command_buffer = renderer.command_buffers[frame]
     check_success(
@@ -410,14 +423,26 @@ submit_frame :: proc(
 ) {
     frame := renderer.frame_index
 
+    renderer.frame_semaphore_submissions += 1
+
+    signal_semaphore_infos := [?]vk.SemaphoreSubmitInfo {
+        {
+            // binary: tells present the image is ready
+            sType     = .SEMAPHORE_SUBMIT_INFO,
+            semaphore = renderer.swapchain.render_complete_semaphores[image_index],
+            stageMask = {.COLOR_ATTACHMENT_OUTPUT},
+        },
+        {
+            // timeline: tells the CPU this slot is free again
+            sType     = .SEMAPHORE_SUBMIT_INFO,
+            semaphore = renderer.frame_semaphore,
+            value     = renderer.frame_semaphore_submissions,
+            stageMask = {.ALL_COMMANDS},
+        },
+    }
     wait_semaphore_info := vk.SemaphoreSubmitInfo {
         sType     = .SEMAPHORE_SUBMIT_INFO,
         semaphore = renderer.image_acquired_semaphores[frame],
-        stageMask = {.COLOR_ATTACHMENT_OUTPUT},
-    }
-    signal_semaphore_info := vk.SemaphoreSubmitInfo {
-        sType     = .SEMAPHORE_SUBMIT_INFO,
-        semaphore = renderer.swapchain.render_complete_semaphores[image_index],
         stageMask = {.COLOR_ATTACHMENT_OUTPUT},
     }
     command_buffer_submit_info := vk.CommandBufferSubmitInfo {
@@ -430,15 +455,17 @@ submit_frame :: proc(
         pWaitSemaphoreInfos      = &wait_semaphore_info,
         commandBufferInfoCount   = 1,
         pCommandBufferInfos      = &command_buffer_submit_info,
-        signalSemaphoreInfoCount = 1,
-        pSignalSemaphoreInfos    = &signal_semaphore_info,
+        signalSemaphoreInfoCount = len(signal_semaphore_infos),
+        pSignalSemaphoreInfos    = &signal_semaphore_infos[0],
     }
 
     check_success(
-        vk.QueueSubmit2(queue, 1, &submit_info, renderer.fences[frame]),
+        vk.QueueSubmit2(queue, 1, &submit_info, 0), // 0 = no fence
         "Failed to submit frame %d",
         frame,
     ) or_return
+
+    renderer.frame_semaphore_values[frame] = renderer.frame_semaphore_submissions
 
     return true
 }
@@ -537,9 +564,8 @@ destroy_renderer :: proc(renderer: ^Renderer, gpu_context: Gpu_Context) {
     for semaphore in renderer.image_acquired_semaphores {
         vk.DestroySemaphore(vk_device, semaphore, nil)
     }
-    for fence in renderer.fences {
-        vk.DestroyFence(vk_device, fence, nil)
-    }
+    vk.DestroySemaphore(vk_device, renderer.frame_semaphore, nil)
+
     if renderer.command_pool != 0 {
         vk.DestroyCommandPool(vk_device, renderer.command_pool, nil)
     }

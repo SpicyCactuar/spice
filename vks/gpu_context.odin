@@ -68,25 +68,26 @@ create_gpu_context :: proc(
     // Required features are also enabled on the logical device by vkb.
     vkb.physical_device_selector_set_required_features(
         &physical_device_selector,
-        {samplerAnisotropy = true},
+        vk.PhysicalDeviceFeatures{samplerAnisotropy = true},
     )
     vkb.physical_device_selector_set_required_features_12(
         &physical_device_selector,
-        {
+        vk.PhysicalDeviceVulkan12Features {
             descriptorIndexing = true,
             shaderSampledImageArrayNonUniformIndexing = true,
             descriptorBindingVariableDescriptorCount = true,
             runtimeDescriptorArray = true,
             bufferDeviceAddress = true,
+            timelineSemaphore = true,
         },
     )
     vkb.physical_device_selector_set_required_features_13(
         &physical_device_selector,
-        {synchronization2 = true, dynamicRendering = true},
+        vk.PhysicalDeviceVulkan13Features{synchronization2 = true, dynamicRendering = true},
     )
     vkb.physical_device_selector_set_required_features_14(
         &physical_device_selector,
-        {maintenance5 = true},
+        vk.PhysicalDeviceVulkan14Features{maintenance5 = true},
     )
 
     check_success(
